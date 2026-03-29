@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -26,6 +27,23 @@ namespace FaceDiff.ViewModels
         private bool _areButtonsActivated;
         private bool _requireConfirmPerBaseImage;
 
+        private static readonly IReadOnlyDictionary<string, string> EmptyTemplateParams = new Dictionary<string, string>();
+
+        private static IReadOnlyDictionary<string, string> TemplateParams(UserSettings s)
+        {
+            if (s?.TemplateParameters == null)
+                return EmptyTemplateParams;
+            return s.TemplateParameters;
+        }
+
+        private string Interpolate(string value) => TemplateInterpolation.Apply(value ?? "", TemplateParams(Settings));
+
+        private void RaiseInterpolationPreviews() => OnPropertyChanged(nameof(DestinationPathPreview));
+
+        protected override void OnTemplateParametersChanged() => RaiseInterpolationPreviews();
+
+        public string DestinationPathPreview => Interpolate(_destinationPath);
+
         public DiffGenerationViewModel()
         {
             DiffResults = new ObservableCollection<DiffResultItem>();
@@ -47,6 +65,7 @@ namespace FaceDiff.ViewModels
                 {
                     if (Settings != null) Settings.DestinationPath = value;
                     Session.DestinationPath = value;
+                    RaiseInterpolationPreviews();
                     ValidateDestination();
                 }
             }
@@ -151,23 +170,42 @@ namespace FaceDiff.ViewModels
                     OnPropertyChanged(nameof(RequireConfirmPerBaseImage));
                 }
             }
+            RaiseInterpolationPreviews();
         }
 
         private async Task StartProcessingAsync()
         {
             IsProcessing = true;
 
-            for (_currentBaseIndex = 0; _currentBaseIndex < Session.BaseImages.Count; _currentBaseIndex++)
+            var toProcess = Session.BaseImages.Where(b => b.IncludeInDiff).ToList();
+            if (toProcess.Count == 0)
             {
-                var baseImg = Session.BaseImages[_currentBaseIndex];
+                IsProcessing = false;
+                StatusText = "No base images are included. Enable at least one card in Face Detection.";
+                IsCompleted = false;
+                return;
+            }
+
+            string destRoot = Interpolate(_destinationPath);
+            if (string.IsNullOrWhiteSpace(destRoot))
+            {
+                IsProcessing = false;
+                StatusText = "Destination path is empty after resolving parameters.";
+                IsCompleted = false;
+                return;
+            }
+
+            for (_currentBaseIndex = 0; _currentBaseIndex < toProcess.Count; _currentBaseIndex++)
+            {
+                var baseImg = toProcess[_currentBaseIndex];
                 CurrentBaseImage = baseImg;
-                StatusText = $"Processing {baseImg.FileName} ({_currentBaseIndex + 1}/{Session.BaseImages.Count})";
+                StatusText = $"Processing {baseImg.FileName} ({_currentBaseIndex + 1}/{toProcess.Count})";
 
                 CurrentBaseDisplay = await ThumbnailService.CreateThumbnailAsync(baseImg.FilePath, 1200);
                 DiffResults.Clear();
 
                 string subDir = Path.Combine("_temp", Path.GetFileNameWithoutExtension(baseImg.FileName));
-                string tempDir = Path.Combine(_destinationPath, subDir);
+                string tempDir = Path.Combine(destRoot, subDir);
 
                 var result = new ProcessResult
                 {
@@ -219,11 +257,11 @@ namespace FaceDiff.ViewModels
 
                 if (accepted)
                 {
-                    Directory.CreateDirectory(_destinationPath);
+                    Directory.CreateDirectory(destRoot);
 
                     foreach (var diffPath in result.GeneratedDiffPaths)
                     {
-                        string dest = Path.Combine(_destinationPath, Path.GetFileName(diffPath));
+                        string dest = Path.Combine(destRoot, Path.GetFileName(diffPath));
                         if (File.Exists(dest))
                             File.Delete(dest);
                         if (File.Exists(diffPath))
@@ -239,7 +277,7 @@ namespace FaceDiff.ViewModels
                 Session.Results.Add(result);
             }
 
-            string tempRoot = Path.Combine(_destinationPath, "_temp");
+            string tempRoot = Path.Combine(destRoot, "_temp");
             if (Directory.Exists(tempRoot))
             {
                 try { Directory.Delete(tempRoot, true); } catch { }
@@ -266,7 +304,10 @@ namespace FaceDiff.ViewModels
             {
                 dialog.Description = "Select Destination Folder";
                 if (!string.IsNullOrEmpty(_destinationPath))
-                    dialog.SelectedPath = _destinationPath;
+                {
+                    string resolved = Interpolate(_destinationPath);
+                    dialog.SelectedPath = Directory.Exists(resolved) ? resolved : _destinationPath;
+                }
                 if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                     DestinationPath = dialog.SelectedPath;
             }
@@ -279,8 +320,8 @@ namespace FaceDiff.ViewModels
             if (string.IsNullOrEmpty(_destinationPath) || string.IsNullOrEmpty(Session.ComparisonFolderPath))
                 return;
 
-            string dest = Path.GetFullPath(_destinationPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string comp = Path.GetFullPath(Session.ComparisonFolderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string dest = Path.GetFullPath(Interpolate(_destinationPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string comp = Path.GetFullPath(Interpolate(Session.ComparisonFolderPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
             if (string.Equals(dest, comp, StringComparison.OrdinalIgnoreCase))
                 DestinationError = "Destination folder must be different from the comparison images folder.";

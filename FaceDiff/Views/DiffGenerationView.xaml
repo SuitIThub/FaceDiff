@@ -20,6 +20,10 @@
                         Margin="8,0,0,0" />
                 <TextBox Text="{Binding DestinationPath, UpdateSourceTrigger=PropertyChanged}" />
             </DockPanel>
+            <TextBlock FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                       TextWrapping="Wrap" Margin="0,0,0,4">
+                <Run Text="Preview: " /><Run Text="{Binding DestinationPathPreview, Mode=OneWay}" />
+            </TextBlock>
             <TextBlock Text="{Binding DestinationError}"
                        Foreground="#EF5350" FontSize="11" Margin="0,0,0,8"
                        Visibility="{Binding HasDestinationError, Converter={StaticResource BoolToVis}}"

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -6,6 +7,8 @@ namespace FaceDiff.Services
 {
     public class UserSettings
     {
+        public Dictionary<string, string> TemplateParameters { get; set; }
+
         public string BaseFolderPath { get; set; }
         public string ComparisonFolderPath { get; set; }
         public string BaseFilter { get; set; }
@@ -37,13 +40,21 @@ namespace FaceDiff.Services
                 if (File.Exists(SettingsPath))
                 {
                     string json = File.ReadAllText(SettingsPath);
-                    return JsonSerializer.Deserialize<UserSettings>(json, JsonOptions) ?? new UserSettings();
+                    var s = JsonSerializer.Deserialize<UserSettings>(json, JsonOptions);
+                    if (s == null)
+                        s = new UserSettings();
+                    if (s.TemplateParameters == null)
+                        s.TemplateParameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    return s;
                 }
             }
             catch
             {
             }
-            return new UserSettings();
+            return new UserSettings
+            {
+                TemplateParameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            };
         }
 
         public void Save()

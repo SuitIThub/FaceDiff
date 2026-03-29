@@ -21,6 +21,30 @@ namespace FaceDiff.ViewModels
         private string _regexPattern;
         private BaseImageModel _hoveredBaseImage;
 
+        private static readonly IReadOnlyDictionary<string, string> EmptyTemplateParams = new Dictionary<string, string>();
+
+        private static IReadOnlyDictionary<string, string> TemplateParams(UserSettings s)
+        {
+            if (s?.TemplateParameters == null)
+                return EmptyTemplateParams;
+            return s.TemplateParameters;
+        }
+
+        private string Interpolate(string value) => TemplateInterpolation.Apply(value ?? "", TemplateParams(Settings));
+
+        private void RaiseInterpolationPreviews()
+        {
+            OnPropertyChanged(nameof(BaseFolderPathPreview));
+            OnPropertyChanged(nameof(ComparisonFolderPathPreview));
+            OnPropertyChanged(nameof(BaseFilterPreview));
+            OnPropertyChanged(nameof(RegexPatternPreview));
+        }
+
+        protected override void OnTemplateParametersChanged()
+        {
+            RaiseInterpolationPreviews();
+        }
+
         private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif" };
 
         private static readonly Color[] MatchColors =
@@ -75,19 +99,23 @@ namespace FaceDiff.ViewModels
         {
             BaseImages = new ObservableCollection<BaseImageModel>();
             ComparisonImages = new ObservableCollection<ComparisonImageModel>();
+            ParameterRows = new ObservableCollection<ParameterRowViewModel>();
             BrowseBaseFolderCommand = new RelayCommand(BrowseBaseFolder);
             BrowseComparisonFolderCommand = new RelayCommand(BrowseComparisonFolder);
             ApplyFilterCommand = new RelayCommand(ApplyBaseFilter);
             ApplyRegexCommand = new RelayCommand(() => ApplyRegexMatching());
+            AddParameterCommand = new RelayCommand(AddParameterRow);
         }
 
         public ObservableCollection<BaseImageModel> BaseImages { get; }
         public ObservableCollection<ComparisonImageModel> ComparisonImages { get; }
+        public ObservableCollection<ParameterRowViewModel> ParameterRows { get; }
 
         public ICommand BrowseBaseFolderCommand { get; }
         public ICommand BrowseComparisonFolderCommand { get; }
         public ICommand ApplyFilterCommand { get; }
         public ICommand ApplyRegexCommand { get; }
+        public ICommand AddParameterCommand { get; }
 
         public string BaseFolderPath
         {
@@ -97,10 +125,13 @@ namespace FaceDiff.ViewModels
                 if (SetProperty(ref _baseFolderPath, value))
                 {
                     if (Settings != null) Settings.BaseFolderPath = value;
+                    RaiseInterpolationPreviews();
                     LoadBaseImages();
                 }
             }
         }
+
+        public string BaseFolderPathPreview => Interpolate(_baseFolderPath);
 
         public string ComparisonFolderPath
         {
@@ -111,47 +142,112 @@ namespace FaceDiff.ViewModels
                 {
                     if (Settings != null) Settings.ComparisonFolderPath = value;
                     Session.ComparisonFolderPath = value;
+                    RaiseInterpolationPreviews();
                     LoadComparisonImages();
                 }
             }
         }
+
+        public string ComparisonFolderPathPreview => Interpolate(_comparisonFolderPath);
 
         public string BaseFilter
         {
             get => _baseFilter;
             set
             {
-                if (SetProperty(ref _baseFilter, value) && Settings != null)
+                if (!SetProperty(ref _baseFilter, value))
+                    return;
+                if (Settings != null)
                     Settings.BaseFilter = value;
+                RaiseInterpolationPreviews();
             }
         }
+
+        public string BaseFilterPreview => Interpolate(_baseFilter);
 
         public string RegexPattern
         {
             get => _regexPattern;
             set
             {
-                if (SetProperty(ref _regexPattern, value) && Settings != null)
+                if (!SetProperty(ref _regexPattern, value))
+                    return;
+                if (Settings != null)
                     Settings.RegexPattern = value;
+                RaiseInterpolationPreviews();
             }
         }
+
+        public string RegexPatternPreview => Interpolate(_regexPattern);
 
         private bool _settingsLoaded;
 
         public override void OnNavigatedTo()
         {
-            if (_settingsLoaded || Settings == null) return;
-            _settingsLoaded = true;
+            if (Settings == null) return;
+            if (!_settingsLoaded)
+            {
+                _settingsLoaded = true;
 
-            _baseFilter = Settings.BaseFilter;
-            OnPropertyChanged(nameof(BaseFilter));
-            _regexPattern = Settings.RegexPattern;
-            OnPropertyChanged(nameof(RegexPattern));
+                _baseFilter = Settings.BaseFilter;
+                OnPropertyChanged(nameof(BaseFilter));
+                _regexPattern = Settings.RegexPattern;
+                OnPropertyChanged(nameof(RegexPattern));
 
-            if (!string.IsNullOrEmpty(Settings.BaseFolderPath))
-                BaseFolderPath = Settings.BaseFolderPath;
-            if (!string.IsNullOrEmpty(Settings.ComparisonFolderPath))
-                ComparisonFolderPath = Settings.ComparisonFolderPath;
+                if (!string.IsNullOrEmpty(Settings.BaseFolderPath))
+                    BaseFolderPath = Settings.BaseFolderPath;
+                if (!string.IsNullOrEmpty(Settings.ComparisonFolderPath))
+                    ComparisonFolderPath = Settings.ComparisonFolderPath;
+            }
+
+            LoadParameterRows();
+        }
+
+        private void EnsureTemplateParameters()
+        {
+            if (Settings == null) return;
+            if (Settings.TemplateParameters == null)
+                Settings.TemplateParameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void LoadParameterRows()
+        {
+            if (Settings == null) return;
+            ParameterRows.Clear();
+            EnsureTemplateParameters();
+            foreach (var kv in Settings.TemplateParameters.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+                ParameterRows.Add(new ParameterRowViewModel(this, kv.Key, kv.Value));
+            if (ParameterRows.Count == 0)
+                ParameterRows.Add(new ParameterRowViewModel(this, "", ""));
+        }
+
+        internal void SyncParametersFromRows()
+        {
+            if (Settings == null) return;
+            EnsureTemplateParameters();
+            Settings.TemplateParameters.Clear();
+            foreach (var r in ParameterRows)
+            {
+                if (string.IsNullOrWhiteSpace(r.Key))
+                    continue;
+                var k = r.Key.Trim();
+                Settings.TemplateParameters[k] = r.Value ?? "";
+            }
+
+            Session?.RaiseTemplateParametersChanged();
+        }
+
+        public void RemoveParameterRow(ParameterRowViewModel row)
+        {
+            ParameterRows.Remove(row);
+            if (ParameterRows.Count == 0)
+                ParameterRows.Add(new ParameterRowViewModel(this, "", ""));
+            SyncParametersFromRows();
+        }
+
+        private void AddParameterRow()
+        {
+            ParameterRows.Add(new ParameterRowViewModel(this, "", ""));
         }
 
         public void OnBaseImageHover(BaseImageModel model)
@@ -185,10 +281,11 @@ namespace FaceDiff.ViewModels
             _allBaseImages.Clear();
             BaseImages.Clear();
 
-            if (string.IsNullOrWhiteSpace(_baseFolderPath) || !Directory.Exists(_baseFolderPath))
+            string basePath = Interpolate(_baseFolderPath);
+            if (string.IsNullOrWhiteSpace(_baseFolderPath) || string.IsNullOrWhiteSpace(basePath) || !Directory.Exists(basePath))
                 return;
 
-            var files = Directory.GetFiles(_baseFolderPath)
+            var files = Directory.GetFiles(basePath)
                 .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                 .OrderBy(f => f)
                 .ToList();
@@ -214,9 +311,10 @@ namespace FaceDiff.ViewModels
         private void ApplyBaseFilter()
         {
             BaseImages.Clear();
-            var filtered = string.IsNullOrWhiteSpace(_baseFilter)
+            string filter = Interpolate(_baseFilter);
+            var filtered = string.IsNullOrWhiteSpace(filter)
                 ? _allBaseImages
-                : _allBaseImages.Where(i => i.FileName.IndexOf(_baseFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                : _allBaseImages.Where(i => i.FileName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
 
             foreach (var img in filtered)
                 BaseImages.Add(img);
@@ -228,10 +326,11 @@ namespace FaceDiff.ViewModels
         {
             ComparisonImages.Clear();
 
-            if (string.IsNullOrWhiteSpace(_comparisonFolderPath) || !Directory.Exists(_comparisonFolderPath))
+            string compPath = Interpolate(_comparisonFolderPath);
+            if (string.IsNullOrWhiteSpace(_comparisonFolderPath) || string.IsNullOrWhiteSpace(compPath) || !Directory.Exists(compPath))
                 return;
 
-            var files = Directory.GetFiles(_comparisonFolderPath)
+            var files = Directory.GetFiles(compPath)
                 .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                 .OrderBy(f => f)
                 .ToList();
@@ -268,14 +367,15 @@ namespace FaceDiff.ViewModels
                 c.HighlightColor = Colors.Transparent;
             }
 
-            if (string.IsNullOrWhiteSpace(_regexPattern))
+            string pattern = Interpolate(_regexPattern);
+            if (string.IsNullOrWhiteSpace(pattern))
             {
                 UpdateCompletion();
                 return;
             }
 
             Regex regex;
-            try { regex = new Regex(_regexPattern); }
+            try { regex = new Regex(pattern); }
             catch { UpdateCompletion(); return; }
 
             var baseGroups = new Dictionary<string, List<BaseImageModel>>();
@@ -369,6 +469,43 @@ namespace FaceDiff.ViewModels
 
 
 
+    }
+
+    public class ParameterRowViewModel : ViewModelBase
+    {
+        private readonly ImageSelectionViewModel _owner;
+        private string _key;
+        private string _value;
+
+        public ParameterRowViewModel(ImageSelectionViewModel owner, string key, string value)
+        {
+            _owner = owner;
+            _key = key;
+            _value = value;
+            RemoveCommand = new RelayCommand(() => _owner.RemoveParameterRow(this));
+        }
+
+        public string Key
+        {
+            get => _key;
+            set
+            {
+                if (SetProperty(ref _key, value))
+                    _owner.SyncParametersFromRows();
+            }
+        }
+
+        public string Value
+        {
+            get => _value;
+            set
+            {
+                if (SetProperty(ref _value, value))
+                    _owner.SyncParametersFromRows();
+            }
+        }
+
+        public ICommand RemoveCommand { get; }
     }
 
     public class RelayCommand<T> : RelayCommand

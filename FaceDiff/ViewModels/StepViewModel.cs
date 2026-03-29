@@ -9,6 +9,7 @@ namespace FaceDiff.ViewModels
         private bool _isEnabled;
         private bool _isCompleted;
         private string _title;
+        private SessionData _session;
 
         public string Title
         {
@@ -28,8 +29,27 @@ namespace FaceDiff.ViewModels
             set => SetProperty(ref _isCompleted, value);
         }
 
-        public SessionData Session { get; set; }
+        public SessionData Session
+        {
+            get => _session;
+            set
+            {
+                if (_session != null)
+                    _session.TemplateParametersChanged -= OnSessionTemplateParametersChanged;
+                _session = value;
+                if (_session != null)
+                    _session.TemplateParametersChanged += OnSessionTemplateParametersChanged;
+            }
+        }
+
         public UserSettings Settings { get; set; }
+
+        private void OnSessionTemplateParametersChanged()
+        {
+            OnTemplateParametersChanged();
+        }
+
+        protected virtual void OnTemplateParametersChanged() { }
 
         public virtual void OnNavigatedTo() { }
         public virtual void OnNavigatedFrom() { }

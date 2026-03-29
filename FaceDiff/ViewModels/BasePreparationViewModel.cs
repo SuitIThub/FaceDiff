@@ -28,6 +28,8 @@ namespace FaceDiff.ViewModels
             EditOvalCommand = new RelayCommand<object>(OnEditOval);
             ConfirmOvalCommand = new RelayCommand(OnConfirmOval);
             CancelOvalCommand = new RelayCommand(OnCancelOval);
+            IncludeAllCommand = new RelayCommand(() => SetAllIncludeInDiff(true));
+            ExcludeAllCommand = new RelayCommand(() => SetAllIncludeInDiff(false));
         }
 
         public ObservableCollection<BaseImageModel> DisplayImages { get; }
@@ -91,6 +93,8 @@ namespace FaceDiff.ViewModels
         public ICommand EditOvalCommand { get; }
         public ICommand ConfirmOvalCommand { get; }
         public ICommand CancelOvalCommand { get; }
+        public ICommand IncludeAllCommand { get; }
+        public ICommand ExcludeAllCommand { get; }
 
         public override void OnNavigatedTo()
         {
@@ -206,9 +210,38 @@ namespace FaceDiff.ViewModels
             }
         }
 
+        public void ToggleInclude(BaseImageModel model)
+        {
+            if (model == null) return;
+            bool newVal = !model.IncludeInDiff;
+
+            if (!string.IsNullOrEmpty(model.MatchGroup))
+            {
+                foreach (var img in DisplayImages)
+                {
+                    if (string.Equals(img.MatchGroup, model.MatchGroup, StringComparison.Ordinal))
+                        img.IncludeInDiff = newVal;
+                }
+            }
+            else
+            {
+                model.IncludeInDiff = newVal;
+            }
+
+            CheckCompletion();
+        }
+
+        private void SetAllIncludeInDiff(bool include)
+        {
+            foreach (var img in DisplayImages)
+                img.IncludeInDiff = include;
+            CheckCompletion();
+        }
+
         private void CheckCompletion()
         {
-            IsCompleted = DisplayImages.All(img => img.HasOval);
+            var included = DisplayImages.Where(i => i.IncludeInDiff).ToList();
+            IsCompleted = included.Count > 0 && included.All(img => img.HasOval);
         }
 
         public void LoadDeniedImages()
@@ -224,6 +257,7 @@ namespace FaceDiff.ViewModels
                 img.DetectionStatus = DetectionStatus.None;
                 img.Oval = null;
                 img.FaceThumbnail = null;
+                img.IncludeInDiff = true;
                 Session.BaseImages.Add(img);
             }
         }

@@ -23,6 +23,7 @@ namespace FaceDiff.Models
         private DetectionStatus _detectionStatus;
         private bool _isHighlighted;
         private bool _isSelected;
+        private bool _includeInDiff = true;
         private System.Windows.Media.Color _highlightColor;
 
         public string FilePath
@@ -86,6 +87,12 @@ namespace FaceDiff.Models
         {
             get => _isSelected;
             set => SetProperty(ref _isSelected, value);
+        }
+
+        public bool IncludeInDiff
+        {
+            get => _includeInDiff;
+            set => SetProperty(ref _includeInDiff, value);
         }
 
         public System.Windows.Media.Color HighlightColor

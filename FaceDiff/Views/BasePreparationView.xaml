@@ -16,6 +16,17 @@
             <StackPanel Grid.Row="0" Margin="0,0,0,8">
                 <TextBlock Text="Base Image Preparation - Face Detection"
                            Style="{StaticResource SectionHeader}" />
+                <TextBlock Text="Click a card to include or exclude that group from diff generation. Excluded groups are not processed and do not require an oval."
+                           Foreground="{StaticResource TextDimBrush}" FontSize="12" TextWrapping="Wrap"
+                           Margin="0,0,0,4" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,8">
+                    <Button Content="Select all" Style="{StaticResource PrimaryButton}"
+                            FontSize="11" Padding="10,4" Margin="0,0,6,0"
+                            Command="{Binding IncludeAllCommand}" />
+                    <Button Content="Unselect all" Style="{StaticResource DangerButton}"
+                            FontSize="11" Padding="10,4"
+                            Command="{Binding ExcludeAllCommand}" />
+                </StackPanel>
                 <DockPanel Margin="0,4,0,0">
                     <TextBlock Text="{Binding StatusText}"
                                Foreground="{StaticResource TextDimBrush}" FontSize="12"
@@ -55,11 +66,24 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Width="150" Height="190" Margin="4"
+                            <Border Width="150" Height="200" Margin="4"
                                     CornerRadius="4"
                                     Background="{StaticResource SurfaceLightBrush}"
                                     BorderThickness="3"
+                                    Cursor="Hand"
+                                    MouseLeftButtonDown="BaseCard_MouseLeftButtonDown"
+                                    ToolTip="Click to include or exclude this group from diff generation"
                                     BorderBrush="{Binding DetectionStatus, Converter={StaticResource StatusToColor}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IncludeInDiff}" Value="False">
+                                                <Setter Property="Opacity" Value="0.42" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <StackPanel Margin="4">
                                     <Image Source="{Binding FaceThumbnail}" Height="110"
                                            Stretch="Uniform"
@@ -68,10 +92,15 @@
                                                Foreground="{StaticResource TextBrush}"
                                                FontSize="10" TextTrimming="CharacterEllipsis"
                                                HorizontalAlignment="Center" Margin="0,4,0,2" />
+                                    <TextBlock Text="Excluded"
+                                               Foreground="{StaticResource TextDimBrush}"
+                                               FontSize="9" HorizontalAlignment="Center" Margin="0,0,0,2"
+                                               Visibility="{Binding IncludeInDiff, Converter={StaticResource InvBoolToVis}}" />
                                     <Button Content="Set Oval"
                                             Style="{StaticResource PrimaryButton}"
                                             FontSize="10" Padding="8,3"
                                             HorizontalAlignment="Center"
+                                            Cursor="Arrow"
                                             Command="{Binding DataContext.EditOvalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}" />
                                 </StackPanel>

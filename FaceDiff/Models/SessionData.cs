@@ -1,9 +1,14 @@
+using System;
 using System.Collections.ObjectModel;
 
 namespace FaceDiff.Models
 {
     public class SessionData
     {
+        public event Action TemplateParametersChanged;
+
+        public void RaiseTemplateParametersChanged() => TemplateParametersChanged?.Invoke();
+
         public ObservableCollection<BaseImageModel> BaseImages { get; set; }
             = new ObservableCollection<BaseImageModel>();
 

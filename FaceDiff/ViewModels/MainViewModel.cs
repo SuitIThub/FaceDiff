@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using FaceDiff.Core;
 using FaceDiff.Models;
@@ -90,10 +92,11 @@ namespace FaceDiff.ViewModels
             bool step4Done = Steps[Steps.Count - 2].IsCompleted;
             bool destHasFiles = false;
 
-            string destPath = _settings.DestinationPath;
-            if (!string.IsNullOrEmpty(destPath) && System.IO.Directory.Exists(destPath))
+            string destPath = TemplateInterpolation.Apply(_settings.DestinationPath ?? "",
+                _settings.TemplateParameters ?? new Dictionary<string, string>());
+            if (!string.IsNullOrEmpty(destPath) && Directory.Exists(destPath))
             {
-                try { destHasFiles = System.IO.Directory.EnumerateFiles(destPath).Any(); }
+                try { destHasFiles = Directory.EnumerateFiles(destPath).Any(); }
                 catch { }
             }
 

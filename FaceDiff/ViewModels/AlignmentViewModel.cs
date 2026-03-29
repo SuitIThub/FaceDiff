@@ -45,6 +45,23 @@ namespace FaceDiff.ViewModels
         private double _diffImageLeft;
         private double _diffImageTop;
 
+        private static readonly IReadOnlyDictionary<string, string> EmptyTemplateParams = new Dictionary<string, string>();
+
+        private static IReadOnlyDictionary<string, string> TemplateParams(UserSettings s)
+        {
+            if (s?.TemplateParameters == null)
+                return EmptyTemplateParams;
+            return s.TemplateParameters;
+        }
+
+        private string Interpolate(string value) => TemplateInterpolation.Apply(value ?? "", TemplateParams(Settings));
+
+        private void RaiseInterpolationPreviews() => OnPropertyChanged(nameof(DestinationPathPreview));
+
+        protected override void OnTemplateParametersChanged() => RaiseInterpolationPreviews();
+
+        public string DestinationPathPreview => Interpolate(_destinationPath);
+
         public AlignmentViewModel()
         {
             ProcessedBaseImages = new ObservableCollection<BaseImageModel>();
@@ -78,6 +95,7 @@ namespace FaceDiff.ViewModels
                 {
                     if (Settings != null) Settings.DestinationPath = value;
                     Session.DestinationPath = value;
+                    RaiseInterpolationPreviews();
                     if (_selectedBaseImage != null)
                         LoadDiffImages();
                 }
@@ -323,7 +341,7 @@ namespace FaceDiff.ViewModels
         {
             ProcessedBaseImages.Clear();
 
-            foreach (var b in Session.BaseImages)
+            foreach (var b in Session.BaseImages.Where(b => b.IncludeInDiff))
                 ProcessedBaseImages.Add(b);
 
             if (Settings != null)
@@ -338,6 +356,7 @@ namespace FaceDiff.ViewModels
             OnPropertyChanged(nameof(DestinationPath));
             OnPropertyChanged(nameof(ViewportWidth));
             OnPropertyChanged(nameof(ViewportHeight));
+            RaiseInterpolationPreviews();
         }
 
         private void BrowseDestination()
@@ -346,7 +365,10 @@ namespace FaceDiff.ViewModels
             {
                 dialog.Description = "Select Destination Folder (Diff Images)";
                 if (!string.IsNullOrEmpty(_destinationPath))
-                    dialog.SelectedPath = _destinationPath;
+                {
+                    string resolved = Interpolate(_destinationPath);
+                    dialog.SelectedPath = Directory.Exists(resolved) ? resolved : _destinationPath;
+                }
                 if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                     DestinationPath = dialog.SelectedPath;
             }
@@ -365,8 +387,8 @@ namespace FaceDiff.ViewModels
             OutfitImages.Clear();
             if (_selectedBaseImage == null || Settings == null) return;
 
-            string baseFolderPath = Settings.BaseFolderPath;
-            string regexPattern = Settings.RegexPattern;
+            string baseFolderPath = Interpolate(Settings.BaseFolderPath);
+            string regexPattern = Interpolate(Settings.RegexPattern);
 
             if (string.IsNullOrEmpty(baseFolderPath) || !Directory.Exists(baseFolderPath))
                 return;
@@ -400,13 +422,13 @@ namespace FaceDiff.ViewModels
             DiffImages.Clear();
             if (_selectedBaseImage == null) return;
 
-            string destPath = _destinationPath;
+            string destPath = Interpolate(_destinationPath);
             if (string.IsNullOrEmpty(destPath))
-                destPath = Settings?.DestinationPath ?? Session.DestinationPath;
+                destPath = Interpolate(Settings?.DestinationPath ?? Session.DestinationPath);
             if (string.IsNullOrEmpty(destPath) || !Directory.Exists(destPath))
                 return;
 
-            string regexPattern = Settings?.RegexPattern;
+            string regexPattern = Interpolate(Settings?.RegexPattern);
             Regex regex = null;
             string targetGroup = null;
 

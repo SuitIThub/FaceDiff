@@ -36,6 +36,10 @@
                                 Margin="8,0,0,0" />
                         <TextBox Text="{Binding DestinationPath, UpdateSourceTrigger=PropertyChanged}" />
                     </DockPanel>
+                    <TextBlock FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                               TextWrapping="Wrap" Margin="0,2,0,0">
+                        <Run Text="Preview: " /><Run Text="{Binding DestinationPathPreview, Mode=OneWay}" />
+                    </TextBlock>
                 </StackPanel>
 
                 <!-- Base image selector -->
