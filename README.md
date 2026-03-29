@@ -46,8 +46,7 @@ If a newer release is published on GitHub, FaceDiff can prompt to download the r
 
 - Set output destination folder
 - Configure pixel difference threshold (0 = exact, up to 100)
-- Review generated diff images per base image
-- Accept to save diffs or deny to skip
+- By default, diffs are saved for each base image without a confirmation step; enable **Confirm each base image before saving** to pause after each base for Accept or Deny
 - Output is transparent PNG (only differing pixels within the oval are visible)
 
 ### Step 4: Finished

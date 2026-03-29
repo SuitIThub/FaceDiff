@@ -13,6 +13,7 @@ namespace FaceDiff.Services
         public double OvalScale { get; set; } = 1.3;
         public string DestinationPath { get; set; }
         public double Threshold { get; set; } = 10;
+        public bool RequireConfirmPerBaseImage { get; set; }
         public int ViewportWidth { get; set; } = 1920;
         public int ViewportHeight { get; set; } = 1080;
 

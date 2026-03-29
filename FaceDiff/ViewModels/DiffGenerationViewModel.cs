@@ -24,6 +24,7 @@ namespace FaceDiff.ViewModels
         private string _statusText;
         private string _destinationError;
         private bool _areButtonsActivated;
+        private bool _requireConfirmPerBaseImage;
 
         public DiffGenerationViewModel()
         {
@@ -113,6 +114,16 @@ namespace FaceDiff.ViewModels
             set => SetProperty(ref _statusText, value);
         }
 
+        public bool RequireConfirmPerBaseImage
+        {
+            get => _requireConfirmPerBaseImage;
+            set
+            {
+                if (SetProperty(ref _requireConfirmPerBaseImage, value) && Settings != null)
+                    Settings.RequireConfirmPerBaseImage = value;
+            }
+        }
+
         public ICommand BrowseDestinationCommand { get; }
         public ICommand StartCommand { get; }
         public ICommand AcceptCommand { get; }
@@ -133,6 +144,11 @@ namespace FaceDiff.ViewModels
                 {
                     _threshold = Settings.Threshold;
                     OnPropertyChanged(nameof(Threshold));
+                }
+                if (_requireConfirmPerBaseImage != Settings.RequireConfirmPerBaseImage)
+                {
+                    _requireConfirmPerBaseImage = Settings.RequireConfirmPerBaseImage;
+                    OnPropertyChanged(nameof(RequireConfirmPerBaseImage));
                 }
             }
         }
@@ -186,10 +202,18 @@ namespace FaceDiff.ViewModels
                     }
                 }
 
-                _decisionTcs = new TaskCompletionSource<bool>();
-                IsWaitingForDecision = true;
-                bool accepted = await _decisionTcs.Task;
-                IsWaitingForDecision = false;
+                bool accepted;
+                if (RequireConfirmPerBaseImage)
+                {
+                    _decisionTcs = new TaskCompletionSource<bool>();
+                    IsWaitingForDecision = true;
+                    accepted = await _decisionTcs.Task;
+                    IsWaitingForDecision = false;
+                }
+                else
+                {
+                    accepted = true;
+                }
 
                 result.Accepted = accepted;
 

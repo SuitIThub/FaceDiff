@@ -25,6 +25,11 @@
                        Visibility="{Binding HasDestinationError, Converter={StaticResource BoolToVis}}"
                        TextWrapping="Wrap" />
 
+            <CheckBox Content="Confirm each base image before saving (Accept / Deny)"
+                      IsChecked="{Binding RequireConfirmPerBaseImage}"
+                      Foreground="{StaticResource TextBrush}"
+                      Margin="0,0,0,8" />
+
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
