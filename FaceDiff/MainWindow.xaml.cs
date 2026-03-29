@@ -1,5 +1,7 @@
+using System;
 using System.Threading.Tasks;
 using System.Windows;
+using FaceDiff.Interop;
 using FaceDiff.Services;
 using FaceDiff.ViewModels;
 
@@ -12,6 +14,12 @@ namespace FaceDiff
             InitializeComponent();
             Closing += MainWindow_Closing;
             Loaded += MainWindow_Loaded;
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            WindowDarkMode.TryApplyDarkTitleBar(this);
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
