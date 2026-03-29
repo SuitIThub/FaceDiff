@@ -17,6 +17,8 @@ namespace FaceDiff.Controls
         private Point _dragStart;
         private double _startCX, _startCY;
 
+        private bool _zoomFollowOval;
+
         public static readonly DependencyProperty ImagePathProperty =
             DependencyProperty.Register(nameof(ImagePath), typeof(string), typeof(OvalEditorControl),
                 new PropertyMetadata(null, OnImagePathChanged));
@@ -82,6 +84,8 @@ namespace FaceDiff.Controls
         {
             var ctrl = (OvalEditorControl)d;
             ctrl.UpdateOvalVisual();
+            if (ctrl._zoomFollowOval && ctrl.HasOval && ctrl._mode == DragMode.None)
+                ctrl.ApplyZoomToOval();
         }
 
         private void LoadImage()
@@ -100,6 +104,8 @@ namespace FaceDiff.Controls
                 BackgroundImage.Source = bi;
                 EditorCanvas.Width = bi.PixelWidth;
                 EditorCanvas.Height = bi.PixelHeight;
+
+                _zoomFollowOval = false;
 
                 UpdateOvalVisual();
             }
@@ -252,6 +258,8 @@ namespace FaceDiff.Controls
         {
             _mode = DragMode.None;
             EditorCanvas.ReleaseMouseCapture();
+            if (_zoomFollowOval && HasOval)
+                ApplyZoomToOval();
         }
 
         private void Handle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -285,6 +293,13 @@ namespace FaceDiff.Controls
 
         private void ZoomToOval_Click(object sender, RoutedEventArgs e)
         {
+            if (!HasOval) return;
+            _zoomFollowOval = true;
+            ApplyZoomToOval();
+        }
+
+        private void ApplyZoomToOval()
+        {
             if (OvalRadiusX <= 0 || OvalRadiusY <= 0) return;
 
             double margin = Math.Max(OvalRadiusX, OvalRadiusY) * 0.5;
@@ -310,6 +325,7 @@ namespace FaceDiff.Controls
 
         private void FitImage_Click(object sender, RoutedEventArgs e)
         {
+            _zoomFollowOval = false;
             EditorCanvas.LayoutTransform = Transform.Identity;
             ImageScrollViewer.ScrollToHome();
         }

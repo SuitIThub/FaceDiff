@@ -49,5 +49,3 @@ On first launch, the application will download face detection model files (~10MB
 dotnet restore FaceDiff\FaceDiff.csproj
 msbuild FaceDiff\FaceDiff.csproj /p:Configuration=Release
 ```
-# FaceDiff
-# FaceDiff
