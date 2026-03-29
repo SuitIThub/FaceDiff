@@ -1,0 +1,24 @@
+<UserControl x:Class="FaceDiff.Views.OvalEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:FaceDiff.Controls">
+
+    <Grid Background="{StaticResource SurfaceBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Text="Drag to draw an oval. Drag inside to reposition. Drag edge handles to resize. Right-click to remove."
+                   Style="{StaticResource SectionHeader}"
+                   Margin="0,0,0,8" />
+
+        <controls:OvalEditorControl Grid.Row="1"
+                                     ImagePath="{Binding ImagePath}"
+                                     OvalCenterX="{Binding Oval.CenterX, Mode=TwoWay}"
+                                     OvalCenterY="{Binding Oval.CenterY, Mode=TwoWay}"
+                                     OvalRadiusX="{Binding Oval.RadiusX, Mode=TwoWay}"
+                                     OvalRadiusY="{Binding Oval.RadiusY, Mode=TwoWay}" />
+    </Grid>
+</UserControl>

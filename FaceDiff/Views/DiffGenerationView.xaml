@@ -1,0 +1,143 @@
+<UserControl x:Class="FaceDiff.Views.DiffGenerationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Config panel -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Diff Generation" Style="{StaticResource SectionHeader}" />
+
+            <TextBlock Text="Destination Folder" Style="{StaticResource FieldLabel}" />
+            <DockPanel Margin="0,0,0,2">
+                <Button DockPanel.Dock="Right" Content="Browse..."
+                        Style="{StaticResource PrimaryButton}"
+                        Command="{Binding BrowseDestinationCommand}"
+                        Margin="8,0,0,0" />
+                <TextBox Text="{Binding DestinationPath, UpdateSourceTrigger=PropertyChanged}" />
+            </DockPanel>
+            <TextBlock Text="{Binding DestinationError}"
+                       Foreground="#EF5350" FontSize="11" Margin="0,0,0,8"
+                       Visibility="{Binding HasDestinationError, Converter={StaticResource BoolToVis}}"
+                       TextWrapping="Wrap" />
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Threshold:"
+                           Foreground="{StaticResource TextBrush}"
+                           VerticalAlignment="Center" Margin="0,0,8,0" />
+                <Slider Grid.Column="1" Minimum="0" Maximum="100"
+                        Value="{Binding Threshold}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2"
+                           Text="{Binding Threshold, StringFormat='{}{0:F0}'}"
+                           Foreground="{StaticResource TextBrush}"
+                           VerticalAlignment="Center" MinWidth="30"
+                           Margin="8,0,16,0" />
+                <Button Grid.Column="3" Content="Start Processing"
+                        Style="{StaticResource AccentButton}"
+                        Command="{Binding StartCommand}" />
+            </Grid>
+
+            <TextBlock Text="{Binding StatusText}"
+                       Foreground="{StaticResource TextDimBrush}" FontSize="12" />
+        </StackPanel>
+
+        <!-- Main content: split view -->
+        <Grid Grid.Row="1"
+              Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVis}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Base image display -->
+            <Border Grid.Column="0" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="4" Padding="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="Base Image"
+                               Style="{StaticResource SectionHeader}"
+                               HorizontalAlignment="Center" Margin="0,0,0,4" />
+                    <Image Grid.Row="1"
+                           Source="{Binding CurrentBaseDisplay}"
+                           Stretch="Uniform"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Grid.Row="2"
+                               Text="{Binding CurrentBaseImage.FileName}"
+                               Foreground="{StaticResource TextBrush}"
+                               HorizontalAlignment="Center" Margin="0,4,0,0" />
+                </Grid>
+            </Border>
+
+            <!-- Diff results grid -->
+            <Border Grid.Column="2" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="4" Padding="8"
+                    MouseLeftButtonDown="DiffPanel_MouseLeftButtonDown"
+                    Background="Transparent">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Generated Diffs"
+                               Style="{StaticResource SectionHeader}" />
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding DiffResults}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource ThumbnailItem}">
+                                        <StackPanel Margin="4">
+                                            <Image Source="{Binding Thumbnail}" Height="100"
+                                                   Stretch="Uniform"
+                                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Text="{Binding ComparisonFileName}"
+                                                       Foreground="{StaticResource TextBrush}"
+                                                       FontSize="9" TextTrimming="CharacterEllipsis"
+                                                       HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- Accept / Deny buttons -->
+                    <StackPanel Grid.Row="2" Orientation="Horizontal"
+                                HorizontalAlignment="Center" Margin="0,12,0,0"
+                                Visibility="{Binding IsWaitingForDecision, Converter={StaticResource BoolToVis}}">
+                        <Button Content="Accept &amp; Save" Style="{StaticResource PrimaryButton}"
+                                MinWidth="120" Margin="0,0,12,0"
+                                IsEnabled="{Binding AreButtonsActivated}"
+                                Command="{Binding AcceptCommand}" />
+                        <Button Content="Deny &amp; Skip" Style="{StaticResource DangerButton}"
+                                MinWidth="120"
+                                IsEnabled="{Binding AreButtonsActivated}"
+                                Command="{Binding DenyCommand}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

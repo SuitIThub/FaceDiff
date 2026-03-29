@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "FaceDiff/FaceDiff.csproj"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    # Skip initial push / orphan commits where there is no parent to diff.
+    if: github.event.before != '0000000000000000000000000000000000000000'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Compare project version to previous commit
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $csproj = "FaceDiff/FaceDiff.csproj"
+
+          $current = (dotnet msbuild $csproj -getProperty:Version -nologo).Trim()
+          if ([string]::IsNullOrWhiteSpace($current)) {
+            Write-Error "FaceDiff.csproj has no <Version>; add one to enable releases."
+          }
+
+          $prev = ""
+          try {
+            $prevContent = git show HEAD~1:$csproj 2>$null
+            if ($LASTEXITCODE -eq 0 -and $prevContent) {
+              $prevContent | Set-Content -Path "FaceDiff/FaceDiff.prev.csproj" -Encoding utf8
+              $prev = (dotnet msbuild "FaceDiff/FaceDiff.prev.csproj" -getProperty:Version -nologo).Trim()
+              Remove-Item "FaceDiff/FaceDiff.prev.csproj" -ErrorAction SilentlyContinue
+            }
+          } catch {
+            $prev = ""
+          }
+
+          Write-Host "Current Version: $current"
+          Write-Host "Previous Version: $(if ($prev) { $prev } else { '(none)' })"
+
+          if ($current -eq $prev) {
+            Write-Host "Version unchanged; skipping build and release."
+            echo "changed=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          echo "changed=true" >> $env:GITHUB_OUTPUT
+          echo "version=$current" >> $env:GITHUB_OUTPUT
+
+      - name: Publish Release build
+        if: steps.version.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          $out = Join-Path $PWD "publish"
+          dotnet publish FaceDiff/FaceDiff.csproj `
+            -c Release `
+            -o $out `
+            -p:Version=$v `
+            --verbosity minimal
+
+      - name: Zip artifact
+        if: steps.version.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          $zip = "FaceDiff-$v.zip"
+          Compress-Archive -Path "publish\*" -DestinationPath $zip -Force
+          echo "ZIP_NAME=$zip" >> $env:GITHUB_ENV
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: FaceDiff v${{ steps.version.outputs.version }}
+          files: ${{ env.ZIP_NAME }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

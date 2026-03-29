@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FaceDiff (Debug)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/FaceDiff/bin/Debug/net8.0-windows/FaceDiff.dll",
+      "cwd": "${workspaceFolder}/FaceDiff/bin/Debug/net8.0-windows",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "FaceDiff (Release)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-release",
+      "program": "${workspaceFolder}/FaceDiff/bin/Release/net8.0-windows/FaceDiff.dll",
+      "cwd": "${workspaceFolder}/FaceDiff/bin/Release/net8.0-windows",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    },
+    {
+      "name": "FaceDiff (No Build)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/FaceDiff/bin/Debug/net8.0-windows/FaceDiff.dll",
+      "cwd": "${workspaceFolder}/FaceDiff/bin/Debug/net8.0-windows",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

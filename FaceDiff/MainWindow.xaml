@@ -1,0 +1,61 @@
+<Window x:Class="FaceDiff.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FaceDiff.ViewModels"
+        xmlns:views="clr-namespace:FaceDiff.Views"
+        Title="FaceDiff - Image Face Diff Tool"
+        MinWidth="1024" MinHeight="600"
+        Width="1400" Height="850"
+        WindowState="Maximized"
+        Background="{StaticResource SurfaceBrush}">
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:ImageSelectionViewModel}">
+            <views:ImageSelectionView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BasePreparationViewModel}">
+            <views:BasePreparationView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DiffGenerationViewModel}">
+            <views:DiffGenerationView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:FinishedViewModel}">
+            <views:FinishedView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AlignmentViewModel}">
+            <views:AlignmentView />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Step Tab Bar -->
+        <TabControl Grid.Row="0" Grid.RowSpan="2"
+                    ItemsSource="{Binding Steps}"
+                    SelectedIndex="{Binding CurrentStepIndex, Mode=TwoWay}"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="4,4,4,0">
+            <TabControl.ItemContainerStyle>
+                <Style TargetType="TabItem" BasedOn="{StaticResource StepTabStyle}">
+                    <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+                    <Setter Property="Header" Value="{Binding Title}" />
+                </Style>
+            </TabControl.ItemContainerStyle>
+            <TabControl.ContentTemplate>
+                <DataTemplate>
+                    <ContentControl Content="{Binding}" Margin="8" />
+                </DataTemplate>
+            </TabControl.ContentTemplate>
+        </TabControl>
+    </Grid>
+</Window>

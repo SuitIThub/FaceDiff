@@ -1,0 +1,171 @@
+<UserControl x:Class="FaceDiff.Views.ImageSelectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:FaceDiff.ViewModels">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Top config panel -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Base images config -->
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Base Images" Style="{StaticResource SectionHeader}" />
+
+                <TextBlock Text="Folder Path" Style="{StaticResource FieldLabel}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Browse..."
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding BrowseBaseFolderCommand}"
+                            Margin="8,0,0,0" />
+                    <TextBox Text="{Binding BaseFolderPath, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+
+                <TextBlock Text="File Name Filter (substring)" Style="{StaticResource FieldLabel}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Apply"
+                            Style="{StaticResource AccentButton}"
+                            Command="{Binding ApplyFilterCommand}"
+                            Margin="8,0,0,0" MinWidth="60" />
+                    <TextBox Text="{Binding BaseFilter, UpdateSourceTrigger=PropertyChanged}"
+                             KeyDown="FilterTextBox_KeyDown" />
+                </DockPanel>
+            </StackPanel>
+
+            <!-- Comparison images config -->
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="Comparison Images" Style="{StaticResource SectionHeader}" />
+
+                <TextBlock Text="Folder Path" Style="{StaticResource FieldLabel}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Browse..."
+                            Style="{StaticResource PrimaryButton}"
+                            Command="{Binding BrowseComparisonFolderCommand}"
+                            Margin="8,0,0,0" />
+                    <TextBox Text="{Binding ComparisonFolderPath, UpdateSourceTrigger=PropertyChanged}" />
+                </DockPanel>
+
+                <TextBlock Text="Regex Pattern (capture group for matching)"
+                           Style="{StaticResource FieldLabel}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Apply"
+                            Style="{StaticResource AccentButton}"
+                            Command="{Binding ApplyRegexCommand}"
+                            Margin="8,0,0,0" MinWidth="60" />
+                    <TextBox Text="{Binding RegexPattern, UpdateSourceTrigger=PropertyChanged}"
+                             FontFamily="Consolas"
+                             KeyDown="RegexTextBox_KeyDown" />
+                </DockPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- Image grids -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Base images grid -->
+            <Border Grid.Column="0" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="4" Padding="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Style="{StaticResource SectionHeader}">
+                        <Run Text="Base Images (" /><Run Text="{Binding BaseImages.Count, Mode=OneWay}" /><Run Text=")" />
+                    </TextBlock>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding BaseImages}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource ThumbnailItem}"
+                                            Cursor="Hand"
+                                            BorderBrush="{Binding HighlightColor, Converter={StaticResource ColorToBrush}}"
+                                            MouseEnter="BaseImage_MouseEnter"
+                                            MouseLeave="BaseImage_MouseLeave">
+                                        <StackPanel Margin="4">
+                                            <Image Source="{Binding Thumbnail}" Height="100"
+                                                   Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Text="{Binding FileName}"
+                                                       Foreground="{StaticResource TextBrush}"
+                                                       FontSize="10" TextTrimming="CharacterEllipsis"
+                                                       HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding MatchedComparisons.Count, StringFormat='({0} matched)'}"
+                                                       Foreground="{StaticResource TextDimBrush}"
+                                                       FontSize="9" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Comparison images grid -->
+            <Border Grid.Column="2" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="4" Padding="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Style="{StaticResource SectionHeader}">
+                        <Run Text="Comparison Images (" /><Run Text="{Binding ComparisonImages.Count, Mode=OneWay}" /><Run Text=")" />
+                    </TextBlock>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding ComparisonImages}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{Binding HighlightColor, Converter={StaticResource ColorToBrush}}"
+                                            Background="{Binding HighlightColor, Converter={StaticResource ColorToBrush}, ConverterParameter=0.15}">
+                                        <Border.Style>
+                                            <Style TargetType="Border" BasedOn="{StaticResource ThumbnailItem}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDimmed}" Value="True">
+                                                        <Setter Property="Opacity" Value="0.25" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel Margin="4">
+                                            <Image Source="{Binding Thumbnail}" Height="100"
+                                                   Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Text="{Binding FileName}"
+                                                       Foreground="{StaticResource TextBrush}"
+                                                       FontSize="10" TextTrimming="CharacterEllipsis"
+                                                       HorizontalAlignment="Center" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

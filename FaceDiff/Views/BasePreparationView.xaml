@@ -1,0 +1,100 @@
+<UserControl x:Class="FaceDiff.Views.BasePreparationView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:FaceDiff.Views">
+
+    <Grid>
+        <!-- Normal overview mode -->
+        <Grid Visibility="{Binding IsEditingOval, Converter={StaticResource InvBoolToVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                <TextBlock Text="Base Image Preparation - Face Detection"
+                           Style="{StaticResource SectionHeader}" />
+                <DockPanel Margin="0,4,0,0">
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="{StaticResource TextDimBrush}" FontSize="12"
+                               VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="Oval Size:"
+                                   Foreground="{StaticResource TextBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <Slider Minimum="0.8" Maximum="2.0"
+                                Value="{Binding OvalScale, Mode=TwoWay}"
+                                TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                Width="160" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding OvalScale, StringFormat={}{0:P0}}"
+                                   Foreground="{StaticResource TextDimBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   MinWidth="36" />
+                    </StackPanel>
+                </DockPanel>
+            </StackPanel>
+
+            <!-- Progress bar -->
+            <Grid Grid.Row="1" Margin="0,0,0,12"
+                  Visibility="{Binding IsDetecting, Converter={StaticResource BoolToVis}}">
+                <ProgressBar Minimum="0"
+                             Maximum="{Binding DetectionTotal}"
+                             Value="{Binding DetectionProgress}" />
+            </Grid>
+
+            <!-- Image grid -->
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding DisplayImages}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Width="150" Height="190" Margin="4"
+                                    CornerRadius="4"
+                                    Background="{StaticResource SurfaceLightBrush}"
+                                    BorderThickness="3"
+                                    BorderBrush="{Binding DetectionStatus, Converter={StaticResource StatusToColor}}">
+                                <StackPanel Margin="4">
+                                    <Image Source="{Binding FaceThumbnail}" Height="110"
+                                           Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                    <TextBlock Text="{Binding FileName}"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontSize="10" TextTrimming="CharacterEllipsis"
+                                               HorizontalAlignment="Center" Margin="0,4,0,2" />
+                                    <Button Content="Set Oval"
+                                            Style="{StaticResource PrimaryButton}"
+                                            FontSize="10" Padding="8,3"
+                                            HorizontalAlignment="Center"
+                                            Command="{Binding DataContext.EditOvalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Oval editor mode -->
+        <Grid Visibility="{Binding IsEditingOval, Converter={StaticResource BoolToVis}}">
+            <views:OvalEditorView DataContext="{Binding OvalEditor}" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom" Margin="0,0,0,20">
+                <Button Content="Confirm" Style="{StaticResource PrimaryButton}"
+                        Margin="0,0,12,0" MinWidth="100"
+                        Command="{Binding ConfirmOvalCommand}" />
+                <Button Content="Cancel" Style="{StaticResource DangerButton}"
+                        MinWidth="100"
+                        Command="{Binding CancelOvalCommand}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
