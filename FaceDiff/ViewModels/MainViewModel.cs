@@ -22,6 +22,8 @@ namespace FaceDiff.ViewModels
             Steps[0].OnNavigatedTo();
         }
 
+        public UserSettings Settings => _settings;
+
         public void SaveSettings() => _settings.Save();
 
         private void InitializeSteps()

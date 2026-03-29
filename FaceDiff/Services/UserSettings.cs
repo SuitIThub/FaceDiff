@@ -16,6 +16,8 @@ namespace FaceDiff.Services
         public int ViewportWidth { get; set; } = 1920;
         public int ViewportHeight { get; set; } = 1080;
 
+        public string SuppressedUpdateVersion { get; set; }
+
         private static readonly string SettingsDir =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FaceDiff");
 
