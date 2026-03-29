@@ -12,14 +12,12 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
-    # Skip initial push / orphan commits where there is no parent to diff.
-    if: github.event.before != '0000000000000000000000000000000000000000'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -38,22 +36,31 @@ jobs:
             Write-Error "FaceDiff.csproj has no <Version>; add one to enable releases."
           }
 
+          # No parent commit, missing file in parent, or no <Version> before → treat as no previous version.
           $prev = ""
-          try {
+          git rev-parse --verify HEAD~1 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            $prevPath = "FaceDiff/FaceDiff.prev.csproj"
             $prevContent = git show HEAD~1:$csproj 2>$null
             if ($LASTEXITCODE -eq 0 -and $prevContent) {
-              $prevContent | Set-Content -Path "FaceDiff/FaceDiff.prev.csproj" -Encoding utf8
-              $prev = (dotnet msbuild "FaceDiff/FaceDiff.prev.csproj" -getProperty:Version -nologo).Trim()
-              Remove-Item "FaceDiff/FaceDiff.prev.csproj" -ErrorAction SilentlyContinue
+              try {
+                $prevContent | Set-Content -Path $prevPath -Encoding utf8
+                $prev = (dotnet msbuild $prevPath -getProperty:Version -nologo).Trim()
+              } catch {
+                $prev = ""
+              } finally {
+                Remove-Item $prevPath -ErrorAction SilentlyContinue
+              }
             }
-          } catch {
-            $prev = ""
           }
+          if ([string]::IsNullOrWhiteSpace($prev)) { $prev = "" }
 
           Write-Host "Current Version: $current"
           Write-Host "Previous Version: $(if ($prev) { $prev } else { '(none)' })"
 
-          if ($current -eq $prev) {
+          # Skip only when we know the previous commit had the same non-empty version.
+          $unchanged = ($prev -ne "") -and ($current -eq $prev)
+          if ($unchanged) {
             Write-Host "Version unchanged; skipping build and release."
             echo "changed=false" >> $env:GITHUB_OUTPUT
             exit 0
