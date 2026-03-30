@@ -42,6 +42,7 @@ namespace FaceDiff.Controls
         public OvalEditorControl()
         {
             InitializeComponent();
+            _zoomFollowOval = true;
         }
 
         public string ImagePath
@@ -105,9 +106,12 @@ namespace FaceDiff.Controls
                 EditorCanvas.Width = bi.PixelWidth;
                 EditorCanvas.Height = bi.PixelHeight;
 
-                _zoomFollowOval = false;
-
                 UpdateOvalVisual();
+
+                // If we already have an oval when loading the image and zoom-follow is enabled,
+                // automatically zoom to the oval once so manual editing starts focused.
+                if (_zoomFollowOval && HasOval)
+                    ApplyZoomToOval();
             }
             catch (Exception ex)
             {
