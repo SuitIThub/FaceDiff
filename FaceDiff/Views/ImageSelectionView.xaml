@@ -41,7 +41,7 @@
                         <Run Text="Preview: " /><Run Text="{Binding BaseFolderPathPreview, Mode=OneWay}" />
                     </TextBlock>
 
-                    <TextBlock Text="File Name Filter (substring)" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Text="File Name Filter (regex)" Style="{StaticResource FieldLabel}" />
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Content="Apply"
                                 Style="{StaticResource AccentButton}"

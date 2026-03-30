@@ -357,9 +357,24 @@ namespace FaceDiff.ViewModels
         {
             BaseImages.Clear();
             string filter = Interpolate(_baseFilter);
-            var filtered = string.IsNullOrWhiteSpace(filter)
-                ? _allBaseImages
-                : _allBaseImages.Where(i => i.FileName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            List<BaseImageModel> filtered;
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                filtered = _allBaseImages;
+            }
+            else
+            {
+                try
+                {
+                    var regex = new Regex(filter, RegexOptions.IgnoreCase);
+                    filtered = _allBaseImages.Where(i => regex.IsMatch(i.FileName)).ToList();
+                }
+                catch
+                {
+                    // Invalid regex: show no base images until pattern is corrected.
+                    filtered = new List<BaseImageModel>();
+                }
+            }
 
             foreach (var img in filtered)
                 BaseImages.Add(img);
