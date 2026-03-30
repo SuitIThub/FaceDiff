@@ -5,7 +5,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>FaceDiff</RootNamespace>
     <AssemblyName>FaceDiff</AssemblyName>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>

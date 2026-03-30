@@ -20,6 +20,10 @@ namespace FaceDiff.ViewModels
         private string _baseFilter;
         private string _regexPattern;
         private BaseImageModel _hoveredBaseImage;
+        private string _resolvedBaseFolderPath;
+        private string _resolvedComparisonFolderPath;
+        private string _resolvedBaseFilter;
+        private string _resolvedRegexPattern;
 
         private static readonly IReadOnlyDictionary<string, string> EmptyTemplateParams = new Dictionary<string, string>();
 
@@ -40,9 +44,50 @@ namespace FaceDiff.ViewModels
             OnPropertyChanged(nameof(RegexPatternPreview));
         }
 
+        private static bool StringEqualsIgnoreCase(string a, string b) =>
+            string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
         protected override void OnTemplateParametersChanged()
         {
             RaiseInterpolationPreviews();
+
+            // Template parameter edits can change the resolved base/comparison paths and the regex/filter.
+            // Re-run the same logic that normally runs when the corresponding TextBoxes change.
+            var newResolvedBasePath = Interpolate(_baseFolderPath);
+            var newResolvedComparisonPath = Interpolate(_comparisonFolderPath);
+            var newResolvedFilter = Interpolate(_baseFilter);
+            var newResolvedRegexPattern = Interpolate(_regexPattern);
+
+            bool basePathChanged = !StringEqualsIgnoreCase(newResolvedBasePath, _resolvedBaseFolderPath);
+            bool comparisonPathChanged = !StringEqualsIgnoreCase(newResolvedComparisonPath, _resolvedComparisonFolderPath);
+            bool baseFilterChanged = !string.Equals(newResolvedFilter, _resolvedBaseFilter, StringComparison.Ordinal);
+            bool regexChanged = !string.Equals(newResolvedRegexPattern, _resolvedRegexPattern, StringComparison.Ordinal);
+
+            _resolvedBaseFolderPath = newResolvedBasePath;
+            _resolvedComparisonFolderPath = newResolvedComparisonPath;
+            _resolvedBaseFilter = newResolvedFilter;
+            _resolvedRegexPattern = newResolvedRegexPattern;
+
+            if (basePathChanged)
+            {
+                LoadBaseImages();
+                // LoadBaseImages calls ApplyBaseFilter which triggers ApplyRegexMatching.
+            }
+            else if (baseFilterChanged)
+            {
+                // Only the filter/pattern changed: we already have _allBaseImages for the base directory.
+                ApplyBaseFilter();
+            }
+
+            if (comparisonPathChanged)
+            {
+                // LoadComparisonImages calls ApplyRegexMatching.
+                LoadComparisonImages();
+            }
+
+            // If we didn't reload either collection, but only the regex changed, re-run matching.
+            if (!basePathChanged && !comparisonPathChanged && regexChanged && !baseFilterChanged)
+                ApplyRegexMatching();
         }
 
         private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif" };
@@ -440,6 +485,12 @@ namespace FaceDiff.ViewModels
                     Session.BaseImages.Add(b);
                 foreach (var c in ComparisonImages.Where(c => !string.IsNullOrEmpty(c.MatchGroup)))
                     Session.ComparisonImages.Add(c);
+            }
+            else
+            {
+                // Prevent downstream steps from using stale session data when the pattern resolves to no matches.
+                Session.BaseImages.Clear();
+                Session.ComparisonImages.Clear();
             }
         }
 
