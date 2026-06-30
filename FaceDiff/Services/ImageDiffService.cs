@@ -62,17 +62,35 @@ namespace FaceDiff.Services
                                     continue;
                                 }
 
+                                byte compAlpha = compPixels[idx + 3];
+
+                                // The comparison image has nothing here (transparent
+                                // background). There is nothing to overlay, so leave the
+                                // result transparent. Without this check the RGB of a
+                                // transparent background pixel (typically black) would be
+                                // copied out as an opaque blob wherever the base and the
+                                // comparison silhouettes differ.
+                                if (compAlpha == 0)
+                                {
+                                    resPixels[idx + 3] = 0; // transparent
+                                    continue;
+                                }
+
+                                // Content that exists in the comparison image but not in
+                                // the (transparent) base is always a real difference.
+                                bool baseTransparent = basePixels[idx + 3] == 0;
+
                                 int db = basePixels[idx] - compPixels[idx];
                                 int dg = basePixels[idx + 1] - compPixels[idx + 1];
                                 int dr = basePixels[idx + 2] - compPixels[idx + 2];
                                 double distSq = dr * dr + dg * dg + db * db;
 
-                                if (distSq > threshSq)
+                                if (baseTransparent || distSq > threshSq)
                                 {
-                                    resPixels[idx] = compPixels[idx];       // B
+                                    resPixels[idx] = compPixels[idx];         // B
                                     resPixels[idx + 1] = compPixels[idx + 1]; // G
                                     resPixels[idx + 2] = compPixels[idx + 2]; // R
-                                    resPixels[idx + 3] = 255;                 // A
+                                    resPixels[idx + 3] = compAlpha;           // preserve mood alpha (anti-aliased edges)
                                 }
                                 else
                                 {
