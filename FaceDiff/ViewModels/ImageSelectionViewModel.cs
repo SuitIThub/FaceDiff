@@ -24,6 +24,15 @@ namespace FaceDiff.ViewModels
         private string _resolvedComparisonFolderPath;
         private string _resolvedBaseFilter;
         private string _resolvedRegexPattern;
+        private string _resolvedFolderModeSignature;
+        private bool _isFolderMode;
+        private bool _isLoadingImages;
+        private bool _isLoadIndeterminate;
+        private int _loadProgress;
+        private int _loadTotal = 1;
+        private string _loadStatusText;
+        private int _baseImageCount;
+        private int _comparisonImageCount;
 
         private static readonly IReadOnlyDictionary<string, string> EmptyTemplateParams = new Dictionary<string, string>();
 
@@ -35,6 +44,16 @@ namespace FaceDiff.ViewModels
         }
 
         private string Interpolate(string value) => TemplateInterpolation.Apply(value ?? "", TemplateParams(Settings));
+
+        private string FolderAwarePreview(string template) =>
+            TemplateInterpolation.PreviewFolderAware(template ?? "", TemplateParams(Settings));
+
+        private string GetFolderModeSignature()
+        {
+            if (!TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out var key, out var root))
+                return "";
+            return key + "\0" + root;
+        }
 
         private void RaiseInterpolationPreviews()
         {
@@ -51,8 +70,20 @@ namespace FaceDiff.ViewModels
         {
             RaiseInterpolationPreviews();
 
-            // Template parameter edits can change the resolved base/comparison paths and the regex/filter.
-            // Re-run the same logic that normally runs when the corresponding TextBoxes change.
+            var newFolderSig = GetFolderModeSignature();
+            bool folderModeChanged = !string.Equals(newFolderSig, _resolvedFolderModeSignature, StringComparison.Ordinal);
+            _resolvedFolderModeSignature = newFolderSig;
+
+            if (folderModeChanged || !string.IsNullOrEmpty(newFolderSig))
+            {
+                _resolvedBaseFolderPath = FolderAwarePreview(_baseFolderPath);
+                _resolvedComparisonFolderPath = FolderAwarePreview(_comparisonFolderPath);
+                _resolvedBaseFilter = FolderAwarePreview(_baseFilter);
+                _resolvedRegexPattern = FolderAwarePreview(_regexPattern);
+                ReloadAllImages();
+                return;
+            }
+
             var newResolvedBasePath = Interpolate(_baseFolderPath);
             var newResolvedComparisonPath = Interpolate(_comparisonFolderPath);
             var newResolvedFilter = Interpolate(_baseFilter);
@@ -68,93 +99,104 @@ namespace FaceDiff.ViewModels
             _resolvedBaseFilter = newResolvedFilter;
             _resolvedRegexPattern = newResolvedRegexPattern;
 
-            if (basePathChanged)
-            {
-                LoadBaseImages();
-                // LoadBaseImages calls ApplyBaseFilter which triggers ApplyRegexMatching.
-            }
-            else if (baseFilterChanged)
-            {
-                // Only the filter/pattern changed: we already have _allBaseImages for the base directory.
-                ApplyBaseFilter();
-            }
-
-            if (comparisonPathChanged)
-            {
-                // LoadComparisonImages calls ApplyRegexMatching.
-                LoadComparisonImages();
-            }
-
-            // If we didn't reload either collection, but only the regex changed, re-run matching.
-            if (!basePathChanged && !comparisonPathChanged && regexChanged && !baseFilterChanged)
-                ApplyRegexMatching();
+            if (basePathChanged || comparisonPathChanged)
+                ReloadAllImages();
+            else if (baseFilterChanged || regexChanged)
+                _ = RebuildFilterAndMatchAsync();
         }
 
         private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif" };
 
         private static readonly Color[] MatchColors =
         {
-            Color.FromRgb(66, 133, 244),
-            Color.FromRgb(234, 67, 53),
-            Color.FromRgb(251, 188, 4),
-            Color.FromRgb(52, 168, 83),
-            Color.FromRgb(255, 109, 0),
-            Color.FromRgb(171, 71, 188),
-            Color.FromRgb(0, 172, 193),
-            Color.FromRgb(124, 179, 66),
-            Color.FromRgb(255, 167, 38),
-            Color.FromRgb(141, 110, 99),
-            Color.FromRgb(38, 166, 154),
-            Color.FromRgb(236, 64, 122),
-            Color.FromRgb(103, 58, 183),
-            Color.FromRgb(0, 150, 136),
-            Color.FromRgb(255, 87, 34),
-            Color.FromRgb(63, 81, 181),
-            Color.FromRgb(205, 220, 57),
-            Color.FromRgb(233, 30, 99),
-            Color.FromRgb(0, 188, 212),
-            Color.FromRgb(139, 195, 74),
-            Color.FromRgb(121, 85, 72),
-            Color.FromRgb(255, 193, 7),
-            Color.FromRgb(33, 150, 243),
-            Color.FromRgb(76, 175, 80),
-            Color.FromRgb(244, 67, 54),
-            Color.FromRgb(156, 39, 176),
-            Color.FromRgb(255, 152, 0),
-            Color.FromRgb(96, 125, 139),
-            Color.FromRgb(0, 137, 123),
-            Color.FromRgb(183, 28, 28),
-            Color.FromRgb(49, 27, 146),
-            Color.FromRgb(0, 105, 92),
-            Color.FromRgb(230, 81, 0),
-            Color.FromRgb(26, 35, 126),
-            Color.FromRgb(46, 125, 50),
-            Color.FromRgb(173, 20, 87),
-            Color.FromRgb(0, 131, 143),
-            Color.FromRgb(158, 157, 36),
-            Color.FromRgb(191, 54, 12),
-            Color.FromRgb(69, 90, 100),
-            Color.FromRgb(106, 27, 154),
-            Color.FromRgb(2, 119, 189),
-            Color.FromRgb(190, 81, 209),
-            Color.FromRgb(216, 67, 21),
+            Color.FromRgb(66, 133, 244), Color.FromRgb(234, 67, 53), Color.FromRgb(251, 188, 4),
+            Color.FromRgb(52, 168, 83), Color.FromRgb(255, 109, 0), Color.FromRgb(171, 71, 188),
+            Color.FromRgb(0, 172, 193), Color.FromRgb(124, 179, 66), Color.FromRgb(255, 167, 38),
+            Color.FromRgb(141, 110, 99), Color.FromRgb(38, 166, 154), Color.FromRgb(236, 64, 122),
+            Color.FromRgb(103, 58, 183), Color.FromRgb(0, 150, 136), Color.FromRgb(255, 87, 34),
+            Color.FromRgb(63, 81, 181), Color.FromRgb(205, 220, 57), Color.FromRgb(233, 30, 99),
+            Color.FromRgb(0, 188, 212), Color.FromRgb(139, 195, 74), Color.FromRgb(121, 85, 72),
+            Color.FromRgb(255, 193, 7), Color.FromRgb(33, 150, 243), Color.FromRgb(76, 175, 80),
+            Color.FromRgb(244, 67, 54), Color.FromRgb(156, 39, 176), Color.FromRgb(255, 152, 0),
+            Color.FromRgb(96, 125, 139), Color.FromRgb(0, 137, 123), Color.FromRgb(183, 28, 28),
+            Color.FromRgb(49, 27, 146), Color.FromRgb(0, 105, 92), Color.FromRgb(230, 81, 0),
+            Color.FromRgb(26, 35, 126), Color.FromRgb(46, 125, 50), Color.FromRgb(173, 20, 87),
+            Color.FromRgb(0, 131, 143), Color.FromRgb(158, 157, 36), Color.FromRgb(191, 54, 12),
+            Color.FromRgb(69, 90, 100), Color.FromRgb(106, 27, 154), Color.FromRgb(2, 119, 189),
+            Color.FromRgb(190, 81, 209), Color.FromRgb(216, 67, 21),
         };
 
         public ImageSelectionViewModel()
         {
-            BaseImages = new ObservableCollection<BaseImageModel>();
-            ComparisonImages = new ObservableCollection<ComparisonImageModel>();
+            BaseImages = new RangeObservableCollection<BaseImageModel>();
+            ComparisonImages = new RangeObservableCollection<ComparisonImageModel>();
+            Categories = new ObservableCollection<ImageCategoryGroup>();
             ParameterRows = new ObservableCollection<ParameterRowViewModel>();
             BrowseBaseFolderCommand = new RelayCommand(BrowseBaseFolder);
             BrowseComparisonFolderCommand = new RelayCommand(BrowseComparisonFolder);
-            ApplyFilterCommand = new RelayCommand(ApplyBaseFilter);
-            ApplyRegexCommand = new RelayCommand(() => ApplyRegexMatching());
+            ApplyFilterCommand = new RelayCommand(() => _ = RebuildFilterAndMatchAsync());
+            ApplyRegexCommand = new RelayCommand(() => _ = RebuildFilterAndMatchAsync());
             AddParameterCommand = new RelayCommand(AddParameterRow);
         }
 
-        public ObservableCollection<BaseImageModel> BaseImages { get; }
-        public ObservableCollection<ComparisonImageModel> ComparisonImages { get; }
+        public RangeObservableCollection<BaseImageModel> BaseImages { get; }
+        public RangeObservableCollection<ComparisonImageModel> ComparisonImages { get; }
+        public ObservableCollection<ImageCategoryGroup> Categories { get; }
         public ObservableCollection<ParameterRowViewModel> ParameterRows { get; }
+
+        public bool IsFolderMode
+        {
+            get => _isFolderMode;
+            private set
+            {
+                if (SetProperty(ref _isFolderMode, value))
+                    OnPropertyChanged(nameof(IsFlatMode));
+            }
+        }
+
+        public bool IsFlatMode => !_isFolderMode;
+
+        public int BaseImageCount
+        {
+            get => _baseImageCount;
+            private set => SetProperty(ref _baseImageCount, value);
+        }
+
+        public int ComparisonImageCount
+        {
+            get => _comparisonImageCount;
+            private set => SetProperty(ref _comparisonImageCount, value);
+        }
+
+        public bool IsLoadingImages
+        {
+            get => _isLoadingImages;
+            private set => SetProperty(ref _isLoadingImages, value);
+        }
+
+        public int LoadProgress
+        {
+            get => _loadProgress;
+            private set => SetProperty(ref _loadProgress, value);
+        }
+
+        public int LoadTotal
+        {
+            get => _loadTotal;
+            private set => SetProperty(ref _loadTotal, value);
+        }
+
+        public string LoadStatusText
+        {
+            get => _loadStatusText;
+            private set => SetProperty(ref _loadStatusText, value);
+        }
+
+        public bool IsLoadIndeterminate
+        {
+            get => _isLoadIndeterminate;
+            private set => SetProperty(ref _isLoadIndeterminate, value);
+        }
 
         public ICommand BrowseBaseFolderCommand { get; }
         public ICommand BrowseComparisonFolderCommand { get; }
@@ -176,7 +218,7 @@ namespace FaceDiff.ViewModels
             }
         }
 
-        public string BaseFolderPathPreview => Interpolate(_baseFolderPath);
+        public string BaseFolderPathPreview => FolderAwarePreview(_baseFolderPath);
 
         public string ComparisonFolderPath
         {
@@ -193,7 +235,7 @@ namespace FaceDiff.ViewModels
             }
         }
 
-        public string ComparisonFolderPathPreview => Interpolate(_comparisonFolderPath);
+        public string ComparisonFolderPathPreview => FolderAwarePreview(_comparisonFolderPath);
 
         public string BaseFilter
         {
@@ -208,7 +250,7 @@ namespace FaceDiff.ViewModels
             }
         }
 
-        public string BaseFilterPreview => Interpolate(_baseFilter);
+        public string BaseFilterPreview => FolderAwarePreview(_baseFilter);
 
         public string RegexPattern
         {
@@ -223,7 +265,7 @@ namespace FaceDiff.ViewModels
             }
         }
 
-        public string RegexPatternPreview => Interpolate(_regexPattern);
+        public string RegexPatternPreview => FolderAwarePreview(_regexPattern);
 
         private bool _settingsLoaded;
 
@@ -246,6 +288,9 @@ namespace FaceDiff.ViewModels
             }
 
             LoadParameterRows();
+            _resolvedFolderModeSignature = GetFolderModeSignature();
+            if (!string.IsNullOrEmpty(_resolvedFolderModeSignature) && Categories.Count == 0)
+                ReloadAllImages();
         }
 
         private void EnsureTemplateParameters()
@@ -300,6 +345,10 @@ namespace FaceDiff.ViewModels
             if (_hoveredBaseImage == model) return;
             _hoveredBaseImage = model;
 
+            // Avoid O(n) UI updates across huge comparison sets.
+            if (ComparisonImageCount > 400)
+                return;
+
             if (model == null || model.MatchedComparisons.Count == 0)
             {
                 foreach (var c in ComparisonImages)
@@ -307,7 +356,7 @@ namespace FaceDiff.ViewModels
                 return;
             }
 
-            var matched = new System.Collections.Generic.HashSet<ComparisonImageModel>(model.MatchedComparisons);
+            var matched = new HashSet<ComparisonImageModel>(model.MatchedComparisons);
             foreach (var c in ComparisonImages)
                 c.IsDimmed = !matched.Contains(c);
         }
@@ -315,198 +364,450 @@ namespace FaceDiff.ViewModels
         public void OnBaseImageUnhover()
         {
             _hoveredBaseImage = null;
+            if (ComparisonImageCount > 400)
+                return;
             foreach (var c in ComparisonImages)
                 c.IsDimmed = false;
         }
 
         private List<BaseImageModel> _allBaseImages = new List<BaseImageModel>();
+        private List<ComparisonImageModel> _allComparisonImages = new List<ComparisonImageModel>();
+        private int _loadGeneration;
 
-        private async void LoadBaseImages()
+        private void OnCategoryEnabledChanged() => _ = UpdateCompletionAsync();
+
+        private void OnCategoryExpandedChanged(ImageCategoryGroup group)
         {
-            _allBaseImages.Clear();
-            BaseImages.Clear();
-
-            string basePath = Interpolate(_baseFolderPath);
-            if (string.IsNullOrWhiteSpace(_baseFolderPath) || string.IsNullOrWhiteSpace(basePath) || !Directory.Exists(basePath))
-                return;
-
-            var files = Directory.GetFiles(basePath)
-                .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                .OrderBy(f => f)
-                .ToList();
-
-            foreach (var file in files)
-            {
-                var model = new BaseImageModel
-                {
-                    FilePath = file,
-                    FileName = Path.GetFileName(file)
-                };
-                _allBaseImages.Add(model);
-            }
-
-            ApplyBaseFilter();
-
-            foreach (var img in BaseImages.ToList())
-            {
-                img.Thumbnail = await ThumbnailService.CreateThumbnailAsync(img.FilePath);
-            }
+            // ItemsSource swaps via Display*; virtualization + LazyThumbnail handle the rest.
         }
 
-        private void ApplyBaseFilter()
+        private bool TryGetFolderRoot(out string rootPath) =>
+            TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out _, out rootPath);
+
+        private void BeginLoading(string status, int total, bool indeterminate = false)
         {
-            BaseImages.Clear();
-            string filter = Interpolate(_baseFilter);
-            List<BaseImageModel> filtered;
-            if (string.IsNullOrWhiteSpace(filter))
+            IsLoadingImages = true;
+            LoadStatusText = status ?? "";
+            LoadTotal = Math.Max(total, 1);
+            LoadProgress = 0;
+            IsLoadIndeterminate = indeterminate;
+        }
+
+        private void EndLoading(int generation)
+        {
+            if (generation != _loadGeneration)
+                return;
+            IsLoadingImages = false;
+            IsLoadIndeterminate = false;
+            LoadStatusText = "";
+        }
+
+        private void ReloadAllImages()
+        {
+            ThumbnailLoadQueue.CancelPending();
+            if (TryGetFolderRoot(out var rootPath))
+                _ = LoadFolderModeAsync(rootPath);
+            else
+                _ = LoadFlatModeAsync();
+        }
+
+        private void LoadBaseImages()
+        {
+            if (TryGetFolderRoot(out var rootPath))
+                _ = LoadFolderModeAsync(rootPath);
+            else
+                _ = LoadFlatModeAsync();
+        }
+
+        private void LoadComparisonImages()
+        {
+            if (TryGetFolderRoot(out var rootPath))
+                _ = LoadFolderModeAsync(rootPath);
+            else
+                _ = LoadFlatModeAsync();
+        }
+
+        private async Task LoadFlatModeAsync()
+        {
+            int generation = ++_loadGeneration;
+            ThumbnailLoadQueue.CancelPending();
+            IsFolderMode = false;
+            Categories.Clear();
+            BeginLoading("Scanning folders...", 1, indeterminate: true);
+
+            string baseTemplate = _baseFolderPath;
+            string compTemplate = _comparisonFolderPath;
+            string filterTemplate = _baseFilter;
+            string regexTemplate = _regexPattern;
+            var parameters = new Dictionary<string, string>(TemplateParams(Settings), StringComparer.OrdinalIgnoreCase);
+
+            var scanned = await Task.Run(() =>
             {
-                filtered = _allBaseImages;
+                var bases = EnumerateImages(baseTemplate, parameters, null);
+                var comps = EnumerateImages(compTemplate, parameters, null)
+                    .Select(b => new ComparisonImageModel
+                    {
+                        FilePath = b.FilePath,
+                        FileName = b.FileName
+                    }).ToList();
+                return (bases, comps);
+            }).ConfigureAwait(true);
+
+            if (generation != _loadGeneration) return;
+
+            _allBaseImages = scanned.bases;
+            _allComparisonImages = scanned.comps;
+
+            BeginLoading("Filtering & matching...", 1, indeterminate: true);
+            await ApplyFilterMatchToUiAsync(generation, filterTemplate, regexTemplate, parameters, folderMode: false)
+                .ConfigureAwait(true);
+            EndLoading(generation);
+        }
+
+        private async Task LoadFolderModeAsync(string rootPath)
+        {
+            int generation = ++_loadGeneration;
+            ThumbnailLoadQueue.CancelPending();
+
+            var previousEnabled = Categories.ToDictionary(c => c.Name, c => c.IsEnabled, StringComparer.OrdinalIgnoreCase);
+
+            IsFolderMode = true;
+            BeginLoading("Scanning folders...", 1, indeterminate: true);
+
+            string baseTemplate = _baseFolderPath;
+            string compTemplate = _comparisonFolderPath;
+            string filterTemplate = _baseFilter;
+            string regexTemplate = _regexPattern;
+            var parameters = new Dictionary<string, string>(TemplateParams(Settings), StringComparer.OrdinalIgnoreCase);
+            string folderKey = TemplateInterpolation.TryParseFolderMode(parameters, out var key, out _) ? key : null;
+
+            var scanned = await Task.Run(() =>
+            {
+                var names = TemplateInterpolation.GetCategoryNames(rootPath).ToList();
+                var allBases = new List<BaseImageModel>();
+                var allComps = new List<ComparisonImageModel>();
+                var groups = new List<(string Name, List<BaseImageModel> Bases, List<ComparisonImageModel> Comps)>();
+
+                foreach (var name in names)
+                {
+                    var catParams = TemplateInterpolation.WithCategory(parameters, folderKey, name);
+                    var bases = EnumerateImages(baseTemplate, catParams, name);
+                    var comps = EnumerateImages(compTemplate, catParams, name)
+                        .Select(b => new ComparisonImageModel
+                        {
+                            FilePath = b.FilePath,
+                            FileName = b.FileName,
+                            Category = name
+                        }).ToList();
+
+                    allBases.AddRange(bases);
+                    allComps.AddRange(comps);
+                    groups.Add((name, bases, comps));
+                }
+
+                return (allBases, allComps, groups);
+            }).ConfigureAwait(true);
+
+            if (generation != _loadGeneration) return;
+
+            _allBaseImages = scanned.allBases;
+            _allComparisonImages = scanned.allComps;
+
+            Categories.Clear();
+            foreach (var g in scanned.groups)
+            {
+                bool enabled = !previousEnabled.TryGetValue(g.Name, out var prevEn) || prevEn;
+                var group = new ImageCategoryGroup(g.Name, OnCategoryEnabledChanged, OnCategoryExpandedChanged)
+                {
+                    IsEnabled = enabled,
+                    IsExpanded = false
+                };
+                group.ComparisonImages.ReplaceAll(g.Comps);
+                group.ComparisonCount = g.Comps.Count;
+                Categories.Add(group);
+            }
+
+            BeginLoading("Filtering & matching...", 1, indeterminate: true);
+            await ApplyFilterMatchToUiAsync(generation, filterTemplate, regexTemplate, parameters, folderMode: true)
+                .ConfigureAwait(true);
+            EndLoading(generation);
+        }
+
+        private static List<BaseImageModel> EnumerateImages(
+            string pathTemplate,
+            IReadOnlyDictionary<string, string> parameters,
+            string category)
+        {
+            var result = new List<BaseImageModel>();
+            if (string.IsNullOrWhiteSpace(pathTemplate))
+                return result;
+
+            string path = TemplateInterpolation.Apply(pathTemplate, parameters);
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+                return result;
+
+            foreach (var file in Directory.EnumerateFiles(path)
+                .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                .OrderBy(f => f))
+            {
+                result.Add(new BaseImageModel
+                {
+                    FilePath = file,
+                    FileName = Path.GetFileName(file),
+                    Category = category
+                });
+            }
+
+            return result;
+        }
+
+        private async Task RebuildFilterAndMatchAsync()
+        {
+            int generation = ++_loadGeneration;
+            ThumbnailLoadQueue.CancelPending();
+            BeginLoading("Filtering & matching...", 1, indeterminate: true);
+
+            var parameters = new Dictionary<string, string>(TemplateParams(Settings), StringComparer.OrdinalIgnoreCase);
+            await ApplyFilterMatchToUiAsync(generation, _baseFilter, _regexPattern, parameters, IsFolderMode)
+                .ConfigureAwait(true);
+            EndLoading(generation);
+        }
+
+        private async Task ApplyFilterMatchToUiAsync(
+            int generation,
+            string filterTemplate,
+            string regexTemplate,
+            Dictionary<string, string> parameters,
+            bool folderMode)
+        {
+            // Detach from UI before background mutation of shared model instances.
+            BaseImages.ReplaceAll(Array.Empty<BaseImageModel>());
+            ComparisonImages.ReplaceAll(Array.Empty<ComparisonImageModel>());
+            if (folderMode)
+            {
+                foreach (var group in Categories)
+                {
+                    group.BaseImages.ReplaceAll(Array.Empty<BaseImageModel>());
+                    group.RaiseDisplayChanged();
+                }
+            }
+
+            string folderKey = TemplateInterpolation.TryParseFolderMode(parameters, out var key, out _) ? key : null;
+            var allBases = _allBaseImages;
+            var allComps = _allComparisonImages;
+            var categoryNames = folderMode
+                ? Categories.Select(c => c.Name).ToList()
+                : new List<string> { null };
+
+            var work = await Task.Run(() =>
+            {
+                var filteredBases = new List<BaseImageModel>();
+                var filteredComps = new List<ComparisonImageModel>();
+                var perCategory = new Dictionary<string, (List<BaseImageModel> Bases, List<ComparisonImageModel> Comps)>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var cat in categoryNames)
+                {
+                    var catParams = cat == null
+                        ? (IReadOnlyDictionary<string, string>)parameters
+                        : TemplateInterpolation.WithCategory(parameters, folderKey, cat);
+
+                    string filter = TemplateInterpolation.Apply(filterTemplate ?? "", catParams);
+                    string pattern = TemplateInterpolation.Apply(regexTemplate ?? "", catParams);
+
+                    var catBases = allBases.Where(b =>
+                        cat == null
+                            ? string.IsNullOrEmpty(b.Category)
+                            : string.Equals(b.Category, cat, StringComparison.OrdinalIgnoreCase)).ToList();
+                    var catComps = allComps.Where(c =>
+                        cat == null
+                            ? string.IsNullOrEmpty(c.Category)
+                            : string.Equals(c.Category, cat, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    List<BaseImageModel> bases;
+                    if (string.IsNullOrWhiteSpace(filter))
+                        bases = catBases;
+                    else
+                    {
+                        try
+                        {
+                            var fr = new Regex(filter, RegexOptions.IgnoreCase);
+                            bases = catBases.Where(i => fr.IsMatch(i.FileName)).ToList();
+                        }
+                        catch { bases = new List<BaseImageModel>(); }
+                    }
+
+                    foreach (var b in bases)
+                    {
+                        b.MatchedComparisons.Clear();
+                        b.MatchGroup = null;
+                        b.HighlightColor = Colors.Transparent;
+                    }
+                    foreach (var c in catComps)
+                    {
+                        c.MatchGroup = null;
+                        c.HighlightColor = Colors.Transparent;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(pattern))
+                    {
+                        try
+                        {
+                            var regex = new Regex(pattern);
+                            int colorStart = 0;
+                            MatchWithRegex(bases, catComps, regex, ref colorStart);
+                        }
+                        catch { /* invalid regex */ }
+                    }
+
+                    filteredBases.AddRange(bases);
+                    filteredComps.AddRange(catComps);
+                    if (cat != null)
+                        perCategory[cat] = (bases, catComps);
+                }
+
+                return (filteredBases, filteredComps, perCategory);
+            }).ConfigureAwait(true);
+
+            if (generation != _loadGeneration) return;
+
+            if (folderMode)
+            {
+                foreach (var group in Categories)
+                {
+                    if (work.perCategory.TryGetValue(group.Name, out var data))
+                    {
+                        group.BaseImages.ReplaceAll(data.Bases);
+                        group.ComparisonImages.ReplaceAll(data.Comps);
+                        group.BaseCount = data.Bases.Count;
+                        group.ComparisonCount = data.Comps.Count;
+                        group.MatchCount = data.Bases.Count(b => b.MatchedComparisons.Count > 0);
+                        if (group.IsExpanded)
+                        {
+                            group.RaiseDisplayChanged();
+                        }
+                    }
+                    else
+                    {
+                        group.BaseImages.ReplaceAll(Array.Empty<BaseImageModel>());
+                        group.ComparisonImages.ReplaceAll(Array.Empty<ComparisonImageModel>());
+                        group.BaseCount = 0;
+                        group.ComparisonCount = 0;
+                        group.MatchCount = 0;
+                    }
+                }
+
+                BaseImages.ReplaceAll(work.filteredBases);
+                ComparisonImages.ReplaceAll(work.filteredComps);
             }
             else
             {
-                try
-                {
-                    var regex = new Regex(filter, RegexOptions.IgnoreCase);
-                    filtered = _allBaseImages.Where(i => regex.IsMatch(i.FileName)).ToList();
-                }
-                catch
-                {
-                    // Invalid regex: show no base images until pattern is corrected.
-                    filtered = new List<BaseImageModel>();
-                }
+                BaseImages.ReplaceAll(work.filteredBases);
+                ComparisonImages.ReplaceAll(work.filteredComps);
             }
 
-            foreach (var img in filtered)
-                BaseImages.Add(img);
+            BaseImageCount = work.filteredBases.Count;
+            ComparisonImageCount = work.filteredComps.Count;
 
-            ApplyRegexMatching();
+            await UpdateCompletionAsync(generation).ConfigureAwait(true);
         }
 
-        private async void LoadComparisonImages()
+        private void MatchWithRegex(
+            IList<BaseImageModel> baseList,
+            IList<ComparisonImageModel> compList,
+            Regex regex,
+            ref int colorStart)
         {
-            ComparisonImages.Clear();
-
-            string compPath = Interpolate(_comparisonFolderPath);
-            if (string.IsNullOrWhiteSpace(_comparisonFolderPath) || string.IsNullOrWhiteSpace(compPath) || !Directory.Exists(compPath))
-                return;
-
-            var files = Directory.GetFiles(compPath)
-                .Where(f => ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                .OrderBy(f => f)
-                .ToList();
-
-            foreach (var file in files)
-            {
-                var model = new ComparisonImageModel
-                {
-                    FilePath = file,
-                    FileName = Path.GetFileName(file)
-                };
-                ComparisonImages.Add(model);
-            }
-
-            ApplyRegexMatching();
-
-            foreach (var img in ComparisonImages.ToList())
-            {
-                img.Thumbnail = await ThumbnailService.CreateThumbnailAsync(img.FilePath);
-            }
-        }
-
-        private void ApplyRegexMatching()
-        {
-            foreach (var b in BaseImages)
-            {
-                b.MatchedComparisons.Clear();
-                b.MatchGroup = null;
-                b.HighlightColor = Colors.Transparent;
-            }
-            foreach (var c in ComparisonImages)
-            {
-                c.MatchGroup = null;
-                c.HighlightColor = Colors.Transparent;
-            }
-
-            string pattern = Interpolate(_regexPattern);
-            if (string.IsNullOrWhiteSpace(pattern))
-            {
-                UpdateCompletion();
-                return;
-            }
-
-            Regex regex;
-            try { regex = new Regex(pattern); }
-            catch { UpdateCompletion(); return; }
-
             var baseGroups = new Dictionary<string, List<BaseImageModel>>();
-            foreach (var b in BaseImages)
+            foreach (var b in baseList)
             {
                 var m = regex.Match(b.FileName);
                 if (m.Success && m.Groups.Count > 1)
                 {
                     b.MatchGroup = m.Groups[1].Value;
-                    if (!baseGroups.ContainsKey(b.MatchGroup))
-                        baseGroups[b.MatchGroup] = new List<BaseImageModel>();
-                    baseGroups[b.MatchGroup].Add(b);
+                    if (!baseGroups.TryGetValue(b.MatchGroup, out var list))
+                    {
+                        list = new List<BaseImageModel>();
+                        baseGroups[b.MatchGroup] = list;
+                    }
+                    list.Add(b);
                 }
             }
 
-            foreach (var c in ComparisonImages)
+            var compsByGroup = new Dictionary<string, List<ComparisonImageModel>>();
+            foreach (var c in compList)
             {
                 var m = regex.Match(c.FileName);
                 if (m.Success && m.Groups.Count > 1)
                 {
                     c.MatchGroup = m.Groups[1].Value;
+                    if (!compsByGroup.TryGetValue(c.MatchGroup, out var list))
+                    {
+                        list = new List<ComparisonImageModel>();
+                        compsByGroup[c.MatchGroup] = list;
+                    }
+                    list.Add(c);
                 }
             }
 
-            var groupKeys = baseGroups.Keys.OrderBy(k => k).ToList();
-            int colorIdx = 0;
-            foreach (var key in groupKeys)
+            foreach (var key in baseGroups.Keys.OrderBy(k => k))
             {
-                var color = MatchColors[colorIdx % MatchColors.Length];
-                colorIdx++;
+                var color = MatchColors[colorStart % MatchColors.Length];
+                colorStart++;
 
-                foreach (var b in baseGroups[key])
-                    b.HighlightColor = color;
+                compsByGroup.TryGetValue(key, out var matchedComps);
+                matchedComps ??= new List<ComparisonImageModel>();
 
-                var matchedComps = ComparisonImages.Where(c => c.MatchGroup == key).ToList();
                 foreach (var c in matchedComps)
                     c.HighlightColor = color;
 
                 foreach (var b in baseGroups[key])
                 {
+                    b.HighlightColor = color;
                     foreach (var c in matchedComps)
                         b.MatchedComparisons.Add(c);
                 }
             }
-
-            UpdateCompletion();
         }
 
-
-
-
-        private void UpdateCompletion()
+        private async Task UpdateCompletionAsync(int? expectedGeneration = null)
         {
-            bool hasMatches = BaseImages.Any(b => b.MatchedComparisons.Count > 0);
-            IsCompleted = hasMatches;
+            int generation = expectedGeneration ?? ++_loadGeneration;
+            if (expectedGeneration == null)
+                BeginLoading("Updating selection...", 1, indeterminate: true);
 
-            if (hasMatches)
+            bool folderMode = IsFolderMode;
+            var enabledNames = folderMode
+                ? Categories.Where(c => c.IsEnabled).Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : null;
+
+            var basesSnap = BaseImages.ToList();
+            var compsSnap = ComparisonImages.ToList();
+
+            var result = await Task.Run(() =>
             {
-                Session.BaseImages.Clear();
-                Session.ComparisonImages.Clear();
-                foreach (var b in BaseImages.Where(b => b.MatchedComparisons.Count > 0))
-                    Session.BaseImages.Add(b);
-                foreach (var c in ComparisonImages.Where(c => !string.IsNullOrEmpty(c.MatchGroup)))
-                    Session.ComparisonImages.Add(c);
-            }
-            else
-            {
-                // Prevent downstream steps from using stale session data when the pattern resolves to no matches.
-                Session.BaseImages.Clear();
-                Session.ComparisonImages.Clear();
-            }
+                IEnumerable<BaseImageModel> eligibleBases = basesSnap;
+                IEnumerable<ComparisonImageModel> eligibleComps = compsSnap;
+
+                if (folderMode)
+                {
+                    eligibleBases = basesSnap.Where(b => enabledNames.Contains(b.Category ?? ""));
+                    eligibleComps = compsSnap.Where(c => enabledNames.Contains(c.Category ?? ""));
+                }
+
+                var sessionBases = eligibleBases.Where(b => b.MatchedComparisons.Count > 0).ToList();
+                var sessionComps = eligibleComps.Where(c => !string.IsNullOrEmpty(c.MatchGroup)).ToList();
+                return (sessionBases, sessionComps, hasMatches: sessionBases.Count > 0);
+            }).ConfigureAwait(true);
+
+            if (expectedGeneration != null && expectedGeneration.Value != _loadGeneration)
+                return;
+
+            IsCompleted = result.hasMatches;
+            Session.BaseImages.ReplaceAll(result.sessionBases);
+            Session.ComparisonImages.ReplaceAll(result.sessionComps);
+
+            if (expectedGeneration == null)
+                EndLoading(generation);
         }
 
         private void BrowseBaseFolder()
@@ -532,9 +833,6 @@ namespace FaceDiff.ViewModels
                     ComparisonFolderPath = dialog.SelectedPath;
             }
         }
-
-
-
     }
 
     public class ParameterRowViewModel : ViewModelBase

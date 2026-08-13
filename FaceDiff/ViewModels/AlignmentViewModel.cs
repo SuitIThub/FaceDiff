@@ -56,11 +56,15 @@ namespace FaceDiff.ViewModels
 
         private string Interpolate(string value) => TemplateInterpolation.Apply(value ?? "", TemplateParams(Settings));
 
+        private string InterpolateForCategory(string value, string category) =>
+            TemplateInterpolation.ApplyForCategory(value ?? "", TemplateParams(Settings), category);
+
         private void RaiseInterpolationPreviews() => OnPropertyChanged(nameof(DestinationPathPreview));
 
         protected override void OnTemplateParametersChanged() => RaiseInterpolationPreviews();
 
-        public string DestinationPathPreview => Interpolate(_destinationPath);
+        public string DestinationPathPreview =>
+            TemplateInterpolation.PreviewFolderAware(_destinationPath ?? "", TemplateParams(Settings));
 
         public AlignmentViewModel()
         {
@@ -387,8 +391,9 @@ namespace FaceDiff.ViewModels
             OutfitImages.Clear();
             if (_selectedBaseImage == null || Settings == null) return;
 
-            string baseFolderPath = Interpolate(Settings.BaseFolderPath);
-            string regexPattern = Interpolate(Settings.RegexPattern);
+            string category = _selectedBaseImage.Category;
+            string baseFolderPath = InterpolateForCategory(Settings.BaseFolderPath, category);
+            string regexPattern = InterpolateForCategory(Settings.RegexPattern, category);
 
             if (string.IsNullOrEmpty(baseFolderPath) || !Directory.Exists(baseFolderPath))
                 return;
@@ -422,13 +427,14 @@ namespace FaceDiff.ViewModels
             DiffImages.Clear();
             if (_selectedBaseImage == null) return;
 
-            string destPath = Interpolate(_destinationPath);
+            string category = _selectedBaseImage.Category;
+            string destPath = InterpolateForCategory(_destinationPath, category);
             if (string.IsNullOrEmpty(destPath))
-                destPath = Interpolate(Settings?.DestinationPath ?? Session.DestinationPath);
+                destPath = InterpolateForCategory(Settings?.DestinationPath ?? Session.DestinationPath, category);
             if (string.IsNullOrEmpty(destPath) || !Directory.Exists(destPath))
                 return;
 
-            string regexPattern = Interpolate(Settings?.RegexPattern);
+            string regexPattern = InterpolateForCategory(Settings?.RegexPattern, category);
             Regex regex = null;
             string targetGroup = null;
 

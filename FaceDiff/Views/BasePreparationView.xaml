@@ -58,56 +58,122 @@
 
             <!-- Image grid -->
             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                <ItemsControl ItemsSource="{Binding DisplayImages}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Width="150" Height="200" Margin="4"
-                                    CornerRadius="4"
-                                    Background="{StaticResource SurfaceLightBrush}"
-                                    BorderThickness="3"
-                                    Cursor="Hand"
-                                    MouseLeftButtonDown="BaseCard_MouseLeftButtonDown"
-                                    ToolTip="Click to include or exclude this group from diff generation"
-                                    BorderBrush="{Binding DetectionStatus, Converter={StaticResource StatusToColor}}">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IncludeInDiff}" Value="False">
-                                                <Setter Property="Opacity" Value="0.42" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <StackPanel Margin="4">
-                                    <Image Source="{Binding FaceThumbnail}" Height="110"
-                                           Stretch="Uniform"
-                                           RenderOptions.BitmapScalingMode="HighQuality" />
-                                    <TextBlock Text="{Binding FileName}"
-                                               Foreground="{StaticResource TextBrush}"
-                                               FontSize="10" TextTrimming="CharacterEllipsis"
-                                               HorizontalAlignment="Center" Margin="0,4,0,2" />
-                                    <TextBlock Text="Excluded"
-                                               Foreground="{StaticResource TextDimBrush}"
-                                               FontSize="9" HorizontalAlignment="Center" Margin="0,0,0,2"
-                                               Visibility="{Binding IncludeInDiff, Converter={StaticResource InvBoolToVis}}" />
-                                    <Button Content="Set Oval"
-                                            Style="{StaticResource PrimaryButton}"
-                                            FontSize="10" Padding="8,3"
-                                            HorizontalAlignment="Center"
-                                            Cursor="Arrow"
-                                            Command="{Binding DataContext.EditOvalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            CommandParameter="{Binding}" />
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <Grid>
+                    <!-- Flat layout -->
+                    <ItemsControl ItemsSource="{Binding DisplayImages}"
+                                  Visibility="{Binding IsFlatDisplay, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="150" Height="200" Margin="4"
+                                        CornerRadius="4"
+                                        Background="{StaticResource SurfaceLightBrush}"
+                                        BorderThickness="3"
+                                        Cursor="Hand"
+                                        MouseLeftButtonDown="BaseCard_MouseLeftButtonDown"
+                                        ToolTip="Click to include or exclude this group from diff generation"
+                                        BorderBrush="{Binding DetectionStatus, Converter={StaticResource StatusToColor}}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Opacity" Value="1" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IncludeInDiff}" Value="False">
+                                                    <Setter Property="Opacity" Value="0.42" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel Margin="4">
+                                        <Image Source="{Binding FaceThumbnail}" Height="110"
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="HighQuality" />
+                                        <TextBlock Text="{Binding FileName}"
+                                                   Foreground="{StaticResource TextBrush}"
+                                                   FontSize="10" TextTrimming="CharacterEllipsis"
+                                                   HorizontalAlignment="Center" Margin="0,4,0,2" />
+                                        <TextBlock Text="Excluded"
+                                                   Foreground="{StaticResource TextDimBrush}"
+                                                   FontSize="9" HorizontalAlignment="Center" Margin="0,0,0,2"
+                                                   Visibility="{Binding IncludeInDiff, Converter={StaticResource InvBoolToVis}}" />
+                                        <Button Content="Set Oval"
+                                                Style="{StaticResource PrimaryButton}"
+                                                FontSize="10" Padding="8,3"
+                                                HorizontalAlignment="Center"
+                                                Cursor="Arrow"
+                                                Command="{Binding DataContext.EditOvalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Category layout -->
+                    <ItemsControl ItemsSource="{Binding DisplayCategories}"
+                                  Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,0,0,10"
+                                          Header="{Binding Name}">
+                                    <ItemsControl ItemsSource="{Binding BaseImages}" Margin="4,4,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Width="150" Height="200" Margin="4"
+                                                        CornerRadius="4"
+                                                        Background="{StaticResource SurfaceLightBrush}"
+                                                        BorderThickness="3"
+                                                        Cursor="Hand"
+                                                        MouseLeftButtonDown="BaseCard_MouseLeftButtonDown"
+                                                        ToolTip="Click to include or exclude this group from diff generation"
+                                                        BorderBrush="{Binding DetectionStatus, Converter={StaticResource StatusToColor}}">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Opacity" Value="1" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IncludeInDiff}" Value="False">
+                                                                    <Setter Property="Opacity" Value="0.42" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel Margin="4">
+                                                        <Image Source="{Binding FaceThumbnail}" Height="110"
+                                                               Stretch="Uniform"
+                                                               RenderOptions.BitmapScalingMode="HighQuality" />
+                                                        <TextBlock Text="{Binding FileName}"
+                                                                   Foreground="{StaticResource TextBrush}"
+                                                                   FontSize="10" TextTrimming="CharacterEllipsis"
+                                                                   HorizontalAlignment="Center" Margin="0,4,0,2" />
+                                                        <TextBlock Text="Excluded"
+                                                                   Foreground="{StaticResource TextDimBrush}"
+                                                                   FontSize="9" HorizontalAlignment="Center" Margin="0,0,0,2"
+                                                                   Visibility="{Binding IncludeInDiff, Converter={StaticResource InvBoolToVis}}" />
+                                                        <Button Content="Set Oval"
+                                                                Style="{StaticResource PrimaryButton}"
+                                                                FontSize="10" Padding="8,3"
+                                                                HorizontalAlignment="Center"
+                                                                Cursor="Arrow"
+                                                                Command="{Binding DataContext.EditOvalCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
             </ScrollViewer>
         </Grid>
 

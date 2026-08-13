@@ -24,6 +24,7 @@ namespace FaceDiff.ViewModels
         public BasePreparationViewModel()
         {
             DisplayImages = new ObservableCollection<BaseImageModel>();
+            DisplayCategories = new ObservableCollection<ImageCategoryGroup>();
             RunDetectionCommand = new RelayCommand(async () => await RunDetectionAsync(), () => !_isDetecting);
             EditOvalCommand = new RelayCommand<object>(OnEditOval);
             ConfirmOvalCommand = new RelayCommand(OnConfirmOval);
@@ -33,6 +34,10 @@ namespace FaceDiff.ViewModels
         }
 
         public ObservableCollection<BaseImageModel> DisplayImages { get; }
+        public ObservableCollection<ImageCategoryGroup> DisplayCategories { get; }
+
+        public bool HasCategories => DisplayCategories.Count > 0;
+        public bool IsFlatDisplay => DisplayCategories.Count == 0;
 
         public bool IsDetecting
         {
@@ -105,13 +110,35 @@ namespace FaceDiff.ViewModels
             }
 
             DisplayImages.Clear();
+            DisplayCategories.Clear();
             foreach (var img in Session.BaseImages)
                 DisplayImages.Add(img);
+
+            BuildDisplayCategories();
+            OnPropertyChanged(nameof(HasCategories));
+            OnPropertyChanged(nameof(IsFlatDisplay));
 
             DetectionTotal = DisplayImages.Count;
 
             if (DisplayImages.Any(i => i.DetectionStatus == DetectionStatus.None))
                 _ = RunDetectionAsync();
+        }
+
+        private void BuildDisplayCategories()
+        {
+            DisplayCategories.Clear();
+            if (!DisplayImages.Any(i => !string.IsNullOrEmpty(i.Category)))
+                return;
+
+            foreach (var group in DisplayImages
+                .GroupBy(i => i.Category ?? "")
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var cat = new ImageCategoryGroup(string.IsNullOrEmpty(group.Key) ? "(none)" : group.Key);
+                foreach (var img in group)
+                    cat.BaseImages.Add(img);
+                DisplayCategories.Add(cat);
+            }
         }
 
         private async Task RunDetectionAsync()
@@ -219,7 +246,8 @@ namespace FaceDiff.ViewModels
             {
                 foreach (var img in DisplayImages)
                 {
-                    if (string.Equals(img.MatchGroup, model.MatchGroup, StringComparison.Ordinal))
+                    if (string.Equals(img.MatchGroup, model.MatchGroup, StringComparison.Ordinal)
+                        && string.Equals(img.Category ?? "", model.Category ?? "", StringComparison.Ordinal))
                         img.IncludeInDiff = newVal;
                 }
             }

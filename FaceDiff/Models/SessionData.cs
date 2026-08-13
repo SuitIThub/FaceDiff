@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using FaceDiff.Core;
 
 namespace FaceDiff.Models
 {
@@ -9,11 +10,11 @@ namespace FaceDiff.Models
 
         public void RaiseTemplateParametersChanged() => TemplateParametersChanged?.Invoke();
 
-        public ObservableCollection<BaseImageModel> BaseImages { get; set; }
-            = new ObservableCollection<BaseImageModel>();
+        public RangeObservableCollection<BaseImageModel> BaseImages { get; set; }
+            = new RangeObservableCollection<BaseImageModel>();
 
-        public ObservableCollection<ComparisonImageModel> ComparisonImages { get; set; }
-            = new ObservableCollection<ComparisonImageModel>();
+        public RangeObservableCollection<ComparisonImageModel> ComparisonImages { get; set; }
+            = new RangeObservableCollection<ComparisonImageModel>();
 
         public ObservableCollection<ProcessResult> Results { get; set; }
             = new ObservableCollection<ProcessResult>();

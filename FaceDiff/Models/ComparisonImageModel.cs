@@ -7,6 +7,7 @@ namespace FaceDiff.Models
     {
         private string _filePath;
         private string _fileName;
+        private string _category;
         private string _matchGroup;
         private BitmapImage _thumbnail;
         private bool _isHighlighted;
@@ -23,6 +24,13 @@ namespace FaceDiff.Models
         {
             get => _fileName;
             set => SetProperty(ref _fileName, value);
+        }
+
+        /// <summary>Folder-category name when a FOLDER: parameter is active; otherwise null/empty.</summary>
+        public string Category
+        {
+            get => _category;
+            set => SetProperty(ref _category, value);
         }
 
         public string MatchGroup

@@ -21,6 +21,7 @@ namespace FaceDiff.Services
                 bi.UriSource = new Uri(imagePath, UriKind.Absolute);
                 bi.DecodePixelWidth = size;
                 bi.CacheOption = BitmapCacheOption.OnLoad;
+                bi.CreateOptions = BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.IgnoreImageCache;
                 bi.EndInit();
                 bi.Freeze();
                 return bi;

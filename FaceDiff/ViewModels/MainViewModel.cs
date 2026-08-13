@@ -92,12 +92,35 @@ namespace FaceDiff.ViewModels
             bool step4Done = Steps[Steps.Count - 2].IsCompleted;
             bool destHasFiles = false;
 
-            string destPath = TemplateInterpolation.Apply(_settings.DestinationPath ?? "",
-                _settings.TemplateParameters ?? new Dictionary<string, string>());
-            if (!string.IsNullOrEmpty(destPath) && Directory.Exists(destPath))
+            var templateParams = _settings.TemplateParameters ?? new Dictionary<string, string>();
+            if (TemplateInterpolation.TryParseFolderMode(templateParams, out _, out var folderRoot))
             {
-                try { destHasFiles = Directory.EnumerateFiles(destPath).Any(); }
-                catch { }
+                foreach (var name in TemplateInterpolation.GetCategoryNames(folderRoot))
+                {
+                    string destPath = TemplateInterpolation.ApplyForCategory(
+                        _settings.DestinationPath ?? "", templateParams, name);
+                    if (!string.IsNullOrEmpty(destPath) && Directory.Exists(destPath))
+                    {
+                        try
+                        {
+                            if (Directory.EnumerateFiles(destPath).Any())
+                            {
+                                destHasFiles = true;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            else
+            {
+                string destPath = TemplateInterpolation.Apply(_settings.DestinationPath ?? "", templateParams);
+                if (!string.IsNullOrEmpty(destPath) && Directory.Exists(destPath))
+                {
+                    try { destHasFiles = Directory.EnumerateFiles(destPath).Any(); }
+                    catch { }
+                }
             }
 
             step5.IsEnabled = step4Done || (step1Done && destHasFiles);

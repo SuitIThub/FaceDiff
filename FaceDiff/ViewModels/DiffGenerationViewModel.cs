@@ -38,11 +38,15 @@ namespace FaceDiff.ViewModels
 
         private string Interpolate(string value) => TemplateInterpolation.Apply(value ?? "", TemplateParams(Settings));
 
+        private string InterpolateForCategory(string value, string category) =>
+            TemplateInterpolation.ApplyForCategory(value ?? "", TemplateParams(Settings), category);
+
         private void RaiseInterpolationPreviews() => OnPropertyChanged(nameof(DestinationPathPreview));
 
         protected override void OnTemplateParametersChanged() => RaiseInterpolationPreviews();
 
-        public string DestinationPathPreview => Interpolate(_destinationPath);
+        public string DestinationPathPreview =>
+            TemplateInterpolation.PreviewFolderAware(_destinationPath ?? "", TemplateParams(Settings));
 
         public DiffGenerationViewModel()
         {
@@ -186,14 +190,15 @@ namespace FaceDiff.ViewModels
                 return;
             }
 
-            string destRoot = Interpolate(_destinationPath);
-            if (string.IsNullOrWhiteSpace(destRoot))
+            if (string.IsNullOrWhiteSpace(_destinationPath))
             {
                 IsProcessing = false;
                 StatusText = "Destination path is empty after resolving parameters.";
                 IsCompleted = false;
                 return;
             }
+
+            string destRoot = null;
 
             for (_currentBaseIndex = 0; _currentBaseIndex < toProcess.Count; _currentBaseIndex++)
             {
@@ -203,6 +208,13 @@ namespace FaceDiff.ViewModels
 
                 CurrentBaseDisplay = await ThumbnailService.CreateThumbnailAsync(baseImg.FilePath, 1200);
                 DiffResults.Clear();
+
+                destRoot = InterpolateForCategory(_destinationPath, baseImg.Category);
+                if (string.IsNullOrWhiteSpace(destRoot))
+                {
+                    StatusText = $"Destination path is empty for category '{baseImg.Category}'.";
+                    continue;
+                }
 
                 string subDir = Path.Combine("_temp", Path.GetFileNameWithoutExtension(baseImg.FileName));
                 string tempDir = Path.Combine(destRoot, subDir);
@@ -277,10 +289,22 @@ namespace FaceDiff.ViewModels
                 Session.Results.Add(result);
             }
 
-            string tempRoot = Path.Combine(destRoot, "_temp");
-            if (Directory.Exists(tempRoot))
+            string tempRootCleanup = destRoot != null ? Path.Combine(destRoot, "_temp") : null;
+            if (tempRootCleanup != null && Directory.Exists(tempRootCleanup))
             {
-                try { Directory.Delete(tempRoot, true); } catch { }
+                try { Directory.Delete(tempRootCleanup, true); } catch { }
+            }
+
+            // Clean leftover _temp folders under other category destinations.
+            foreach (var cat in toProcess.Select(b => b.Category).Distinct())
+            {
+                var root = InterpolateForCategory(_destinationPath, cat);
+                if (string.IsNullOrWhiteSpace(root)) continue;
+                var tr = Path.Combine(root, "_temp");
+                if (Directory.Exists(tr))
+                {
+                    try { Directory.Delete(tr, true); } catch { }
+                }
             }
 
             IsProcessing = false;
@@ -320,11 +344,43 @@ namespace FaceDiff.ViewModels
             if (string.IsNullOrEmpty(_destinationPath) || string.IsNullOrEmpty(Session.ComparisonFolderPath))
                 return;
 
-            string dest = Path.GetFullPath(Interpolate(_destinationPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string comp = Path.GetFullPath(Interpolate(Session.ComparisonFolderPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out _, out var rootPath))
+            {
+                foreach (var name in TemplateInterpolation.GetCategoryNames(rootPath))
+                {
+                    try
+                    {
+                        string dest = Path.GetFullPath(InterpolateForCategory(_destinationPath, name))
+                            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        string comp = Path.GetFullPath(InterpolateForCategory(Session.ComparisonFolderPath, name))
+                            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-            if (string.Equals(dest, comp, StringComparison.OrdinalIgnoreCase))
-                DestinationError = "Destination folder must be different from the comparison images folder.";
+                        if (string.Equals(dest, comp, StringComparison.OrdinalIgnoreCase))
+                        {
+                            DestinationError = "Destination folder must be different from the comparison images folder.";
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        // Invalid path for this category — skip collision check.
+                    }
+                }
+                return;
+            }
+
+            try
+            {
+                string dest = Path.GetFullPath(Interpolate(_destinationPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string comp = Path.GetFullPath(Interpolate(Session.ComparisonFolderPath)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                if (string.Equals(dest, comp, StringComparison.OrdinalIgnoreCase))
+                    DestinationError = "Destination folder must be different from the comparison images folder.";
+            }
+            catch
+            {
+                // Invalid path template — leave validation to processing time.
+            }
         }
     }
 
