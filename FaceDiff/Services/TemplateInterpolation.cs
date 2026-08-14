@@ -26,17 +26,19 @@ namespace FaceDiff.Services
         }
 
         /// <summary>
-        /// Finds the first parameter whose value is <c>FOLDER:&lt;path&gt;</c>.
-        /// Additional FOLDER parameters are ignored.
+        /// Finds the first <c>FOLDER:&lt;path&gt;</c> parameter whose key is referenced as
+        /// <c>{key}</c> in at least one of <paramref name="usedTemplates"/>.
+        /// Unused FOLDER parameters do not activate category mode.
         /// </summary>
         public static bool TryParseFolderMode(
             IReadOnlyDictionary<string, string> parameters,
             out string paramKey,
-            out string rootPath)
+            out string rootPath,
+            params string[] usedTemplates)
         {
             paramKey = null;
             rootPath = null;
-            if (parameters == null || parameters.Count == 0)
+            if (parameters == null || parameters.Count == 0 || usedTemplates == null || usedTemplates.Length == 0)
                 return false;
 
             foreach (var kv in parameters)
@@ -48,9 +50,31 @@ namespace FaceDiff.Services
                 if (!value.StartsWith(FolderPrefix, StringComparison.OrdinalIgnoreCase))
                     continue;
 
+                if (!AnyTemplateUsesPlaceholder(usedTemplates, kv.Key))
+                    continue;
+
                 paramKey = kv.Key;
                 rootPath = value.Substring(FolderPrefix.Length).Trim();
                 return !string.IsNullOrWhiteSpace(rootPath);
+            }
+
+            return false;
+        }
+
+        public static bool AnyTemplateUsesPlaceholder(IEnumerable<string> templates, string key)
+        {
+            if (templates == null || string.IsNullOrEmpty(key))
+                return false;
+
+            foreach (var template in templates)
+            {
+                if (string.IsNullOrEmpty(template))
+                    continue;
+                foreach (Match m in Placeholder.Matches(template))
+                {
+                    if (string.Equals(m.Groups[1].Value, key, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
             }
 
             return false;
@@ -98,7 +122,7 @@ namespace FaceDiff.Services
             string category)
         {
             if (string.IsNullOrEmpty(category)
-                || !TryParseFolderMode(parameters, out var key, out _))
+                || !TryParseFolderMode(parameters, out var key, out _, template))
             {
                 return Apply(template ?? "", parameters);
             }
@@ -115,7 +139,7 @@ namespace FaceDiff.Services
             IReadOnlyDictionary<string, string> parameters,
             int maxNames = 3)
         {
-            if (!TryParseFolderMode(parameters, out var key, out var rootPath))
+            if (!TryParseFolderMode(parameters, out var key, out var rootPath, template))
                 return Apply(template ?? "", parameters);
 
             var names = GetCategoryNames(rootPath);

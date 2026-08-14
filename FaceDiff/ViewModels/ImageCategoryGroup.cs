@@ -45,6 +45,8 @@ namespace FaceDiff.ViewModels
             }
         }
 
+        public void SetEnabledSilent(bool value) => SetProperty(ref _isEnabled, value, nameof(IsEnabled));
+
         /// <summary>Default collapsed so expanding does not realize thousands of visuals at once.</summary>
         public bool IsExpanded
         {

@@ -344,7 +344,8 @@ namespace FaceDiff.ViewModels
             if (string.IsNullOrEmpty(_destinationPath) || string.IsNullOrEmpty(Session.ComparisonFolderPath))
                 return;
 
-            if (TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out _, out var rootPath))
+            if (TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out _, out var rootPath,
+                    _destinationPath, Session.ComparisonFolderPath))
             {
                 foreach (var name in TemplateInterpolation.GetCategoryNames(rootPath))
                 {

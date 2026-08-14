@@ -93,7 +93,8 @@ namespace FaceDiff.ViewModels
             bool destHasFiles = false;
 
             var templateParams = _settings.TemplateParameters ?? new Dictionary<string, string>();
-            if (TemplateInterpolation.TryParseFolderMode(templateParams, out _, out var folderRoot))
+            if (TemplateInterpolation.TryParseFolderMode(templateParams, out _, out var folderRoot,
+                    _settings.DestinationPath))
             {
                 foreach (var name in TemplateInterpolation.GetCategoryNames(folderRoot))
                 {

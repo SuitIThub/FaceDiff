@@ -48,9 +48,12 @@ namespace FaceDiff.ViewModels
         private string FolderAwarePreview(string template) =>
             TemplateInterpolation.PreviewFolderAware(template ?? "", TemplateParams(Settings));
 
+        private string[] FolderModeTemplates() =>
+            new[] { _baseFolderPath, _comparisonFolderPath, _baseFilter, _regexPattern };
+
         private string GetFolderModeSignature()
         {
-            if (!TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out var key, out var root))
+            if (!TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out var key, out var root, FolderModeTemplates()))
                 return "";
             return key + "\0" + root;
         }
@@ -137,6 +140,8 @@ namespace FaceDiff.ViewModels
             ApplyFilterCommand = new RelayCommand(() => _ = RebuildFilterAndMatchAsync());
             ApplyRegexCommand = new RelayCommand(() => _ = RebuildFilterAndMatchAsync());
             AddParameterCommand = new RelayCommand(AddParameterRow);
+            EnableAllCategoriesCommand = new RelayCommand(() => SetAllCategoriesEnabled(true));
+            DisableAllCategoriesCommand = new RelayCommand(() => SetAllCategoriesEnabled(false));
         }
 
         public RangeObservableCollection<BaseImageModel> BaseImages { get; }
@@ -203,6 +208,8 @@ namespace FaceDiff.ViewModels
         public ICommand ApplyFilterCommand { get; }
         public ICommand ApplyRegexCommand { get; }
         public ICommand AddParameterCommand { get; }
+        public ICommand EnableAllCategoriesCommand { get; }
+        public ICommand DisableAllCategoriesCommand { get; }
 
         public string BaseFolderPath
         {
@@ -374,7 +381,33 @@ namespace FaceDiff.ViewModels
         private List<ComparisonImageModel> _allComparisonImages = new List<ComparisonImageModel>();
         private int _loadGeneration;
 
-        private void OnCategoryEnabledChanged() => _ = UpdateCompletionAsync();
+        private bool _suppressCategoryEnabled;
+
+        private void OnCategoryEnabledChanged()
+        {
+            if (_suppressCategoryEnabled)
+                return;
+            _ = UpdateCompletionAsync();
+        }
+
+        private void SetAllCategoriesEnabled(bool enabled)
+        {
+            if (!IsFolderMode || Categories.Count == 0)
+                return;
+
+            _suppressCategoryEnabled = true;
+            try
+            {
+                foreach (var group in Categories)
+                    group.SetEnabledSilent(enabled);
+            }
+            finally
+            {
+                _suppressCategoryEnabled = false;
+            }
+
+            _ = UpdateCompletionAsync();
+        }
 
         private void OnCategoryExpandedChanged(ImageCategoryGroup group)
         {
@@ -382,7 +415,7 @@ namespace FaceDiff.ViewModels
         }
 
         private bool TryGetFolderRoot(out string rootPath) =>
-            TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out _, out rootPath);
+            TemplateInterpolation.TryParseFolderMode(TemplateParams(Settings), out _, out rootPath, FolderModeTemplates());
 
         private void BeginLoading(string status, int total, bool indeterminate = false)
         {
@@ -427,6 +460,8 @@ namespace FaceDiff.ViewModels
                 _ = LoadFlatModeAsync();
         }
 
+        private bool IsCurrent(int generation) => generation == _loadGeneration;
+
         private async Task LoadFlatModeAsync()
         {
             int generation = ++_loadGeneration;
@@ -453,7 +488,7 @@ namespace FaceDiff.ViewModels
                 return (bases, comps);
             }).ConfigureAwait(true);
 
-            if (generation != _loadGeneration) return;
+            if (!IsCurrent(generation)) return;
 
             _allBaseImages = scanned.bases;
             _allComparisonImages = scanned.comps;
@@ -472,6 +507,7 @@ namespace FaceDiff.ViewModels
             var previousEnabled = Categories.ToDictionary(c => c.Name, c => c.IsEnabled, StringComparer.OrdinalIgnoreCase);
 
             IsFolderMode = true;
+            Categories.Clear();
             BeginLoading("Scanning folders...", 1, indeterminate: true);
 
             string baseTemplate = _baseFolderPath;
@@ -479,7 +515,7 @@ namespace FaceDiff.ViewModels
             string filterTemplate = _baseFilter;
             string regexTemplate = _regexPattern;
             var parameters = new Dictionary<string, string>(TemplateParams(Settings), StringComparer.OrdinalIgnoreCase);
-            string folderKey = TemplateInterpolation.TryParseFolderMode(parameters, out var key, out _) ? key : null;
+            string folderKey = TemplateInterpolation.TryParseFolderMode(parameters, out var key, out _, FolderModeTemplates()) ? key : null;
 
             var scanned = await Task.Run(() =>
             {
@@ -508,7 +544,7 @@ namespace FaceDiff.ViewModels
                 return (allBases, allComps, groups);
             }).ConfigureAwait(true);
 
-            if (generation != _loadGeneration) return;
+            if (!IsCurrent(generation)) return;
 
             _allBaseImages = scanned.allBases;
             _allComparisonImages = scanned.allComps;
@@ -516,6 +552,8 @@ namespace FaceDiff.ViewModels
             Categories.Clear();
             foreach (var g in scanned.groups)
             {
+                if (!IsCurrent(generation)) return;
+
                 bool enabled = !previousEnabled.TryGetValue(g.Name, out var prevEn) || prevEn;
                 var group = new ImageCategoryGroup(g.Name, OnCategoryEnabledChanged, OnCategoryExpandedChanged)
                 {
@@ -526,6 +564,8 @@ namespace FaceDiff.ViewModels
                 group.ComparisonCount = g.Comps.Count;
                 Categories.Add(group);
             }
+
+            if (!IsCurrent(generation)) return;
 
             BeginLoading("Filtering & matching...", 1, indeterminate: true);
             await ApplyFilterMatchToUiAsync(generation, filterTemplate, regexTemplate, parameters, folderMode: true)
@@ -580,6 +620,8 @@ namespace FaceDiff.ViewModels
             Dictionary<string, string> parameters,
             bool folderMode)
         {
+            if (!IsCurrent(generation)) return;
+
             // Detach from UI before background mutation of shared model instances.
             BaseImages.ReplaceAll(Array.Empty<BaseImageModel>());
             ComparisonImages.ReplaceAll(Array.Empty<ComparisonImageModel>());
@@ -592,7 +634,7 @@ namespace FaceDiff.ViewModels
                 }
             }
 
-            string folderKey = TemplateInterpolation.TryParseFolderMode(parameters, out var key, out _) ? key : null;
+            string folderKey = TemplateInterpolation.TryParseFolderMode(parameters, out var key, out _, FolderModeTemplates()) ? key : null;
             var allBases = _allBaseImages;
             var allComps = _allComparisonImages;
             var categoryNames = folderMode
@@ -668,7 +710,7 @@ namespace FaceDiff.ViewModels
                 return (filteredBases, filteredComps, perCategory);
             }).ConfigureAwait(true);
 
-            if (generation != _loadGeneration) return;
+            if (!IsCurrent(generation) || folderMode != IsFolderMode) return;
 
             if (folderMode)
             {
@@ -771,8 +813,9 @@ namespace FaceDiff.ViewModels
 
         private async Task UpdateCompletionAsync(int? expectedGeneration = null)
         {
-            int generation = expectedGeneration ?? ++_loadGeneration;
-            if (expectedGeneration == null)
+            int generation = expectedGeneration ?? _loadGeneration;
+            bool showProgress = expectedGeneration == null;
+            if (showProgress)
                 BeginLoading("Updating selection...", 1, indeterminate: true);
 
             bool folderMode = IsFolderMode;
@@ -799,14 +842,18 @@ namespace FaceDiff.ViewModels
                 return (sessionBases, sessionComps, hasMatches: sessionBases.Count > 0);
             }).ConfigureAwait(true);
 
-            if (expectedGeneration != null && expectedGeneration.Value != _loadGeneration)
+            if (!IsCurrent(generation) || folderMode != IsFolderMode)
+            {
+                if (showProgress)
+                    EndLoading(generation);
                 return;
+            }
 
             IsCompleted = result.hasMatches;
             Session.BaseImages.ReplaceAll(result.sessionBases);
             Session.ComparisonImages.ReplaceAll(result.sessionComps);
 
-            if (expectedGeneration == null)
+            if (showProgress)
                 EndLoading(generation);
         }
 
